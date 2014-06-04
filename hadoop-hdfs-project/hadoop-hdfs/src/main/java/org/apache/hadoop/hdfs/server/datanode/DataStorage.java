@@ -25,6 +25,7 @@ import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
+import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.LayoutVersion;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
@@ -776,8 +777,23 @@ public class DataStorage extends Storage {
     } 
     LOG.info( hardLink.linkStats.report() );
   }
+
+  static void linkBlocks(File from, File to, int oldLV, HardLink hl)
+  throws IOException {
+    boolean upgradeToIdBasedLayout = false;
+    IdBasedBlockDirectory idbd = new IdBasedBlockDirectory(to);
+    // If we are upgrading from a version older than the one where we introduced
+    // block ID-based layout AND we're working with the finalized directory,
+    // we'll need to upgrade from the old flat layout to the block ID-based one
+    if (oldLV > LayoutVersion.Feature.BLOCKID_BASED_LAYOUT.getInfo().
+        getLayoutVersion() && to.getName().equals(STORAGE_DIR_FINALIZED)) {
+      upgradeToIdBasedLayout = true;
+    }
+    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, idbd);
+  }
   
-  static void linkBlocks(File from, File to, int oldLV, HardLink hl) 
+  static void linkBlocksHelper(File from, File to, int oldLV, HardLink hl,
+  boolean upgradeToIdBasedLayout, IdBasedBlockDirectory idbd)
   throws IOException {
     if (!from.exists()) {
       return;
@@ -805,9 +821,6 @@ public class DataStorage extends Storage {
     // from is a directory
     hl.linkStats.countDirs++;
     
-    if (!to.mkdirs())
-      throw new IOException("Cannot create directory " + to);
-    
     String[] blockNames = from.list(new java.io.FilenameFilter() {
       @Override
       public boolean accept(File dir, String name) {
@@ -815,12 +828,30 @@ public class DataStorage extends Storage {
       }
     });
 
+    // If we are upgrading to block ID-based layout, we don't want to recreate
+    // any subdirs from the source that contain blocks, since we have a new
+    // directory structure
+    if (!upgradeToIdBasedLayout || !to.getName().startsWith(
+        BLOCK_SUBDIR_PREFIX)) {
+      if (!to.mkdirs())
+        throw new IOException("Cannot create directory " + to);
+    }
+
     // Block files just need hard links with the same file names
     // but a different directory
     if (blockNames.length > 0) {
-      HardLink.createHardLinkMult(from, blockNames, to);
-      hl.linkStats.countMultLinks++;
-      hl.linkStats.countFilesMultLinks += blockNames.length;
+      if (upgradeToIdBasedLayout) {
+        for (String blockName : blockNames) {
+          long blockId = Block.getBlockId(blockName);
+          HardLink.createHardLink(new File(from, blockName), new File(
+            idbd.getDirectory(blockId), blockName));
+          hl.linkStats.countSingleLinks++;
+        }
+      } else {
+        HardLink.createHardLinkMult(from, blockNames, to);
+        hl.linkStats.countMultLinks++;
+        hl.linkStats.countFilesMultLinks += blockNames.length;
+      }
     } else {
       hl.linkStats.countEmptyDirs++;
     }
@@ -834,8 +865,8 @@ public class DataStorage extends Storage {
         }
       });
     for(int i = 0; i < otherNames.length; i++)
-      linkBlocks(new File(from, otherNames[i]), 
-          new File(to, otherNames[i]), oldLV, hl);
+      linkBlocksHelper(new File(from, otherNames[i]),
+          new File(to, otherNames[i]), oldLV, hl, upgradeToIdBasedLayout, idbd);
   }
 
   /**

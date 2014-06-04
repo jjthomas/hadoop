@@ -235,10 +235,6 @@ class FsVolumeImpl implements FsVolumeSpi {
     // dfsUsage.incDfsUsed(b.getNumBytes()+metaFile.length());
     bp.addToReplicasMap(volumeMap, dir, isFinalized);
   }
-  
-  void clearPath(String bpid, File f) throws IOException {
-    getBlockPoolSlice(bpid).clearPath(f);
-  }
 
   @Override
   public String toString() {

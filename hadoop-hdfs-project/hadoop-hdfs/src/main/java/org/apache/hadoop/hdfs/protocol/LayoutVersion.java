@@ -125,7 +125,10 @@ public class LayoutVersion {
     PROTOBUF_FORMAT(-52, "Use protobuf to serialize FSImage"),
     EXTENDED_ACL(-53, "Extended ACL"),
     RESERVED_REL2_4_0(-54, -51, "Reserved for release 2.4.0", true,
-        PROTOBUF_FORMAT, EXTENDED_ACL);
+        PROTOBUF_FORMAT, EXTENDED_ACL),
+    BLOCKID_BASED_LAYOUT(-55,
+        "The block ID of a block uniquely determines its position in the " +
+        "directory structure");
 
     private final FeatureInfo info;
 
