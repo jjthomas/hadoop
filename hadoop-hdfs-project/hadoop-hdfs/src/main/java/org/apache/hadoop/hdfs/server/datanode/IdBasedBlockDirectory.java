@@ -19,10 +19,6 @@ package org.apache.hadoop.hdfs.server.datanode;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-
-import org.apache.hadoop.fs.FileUtil;
-import org.apache.hadoop.io.MD5Hash;
 
 public class IdBasedBlockDirectory {
   private File root;
@@ -37,16 +33,6 @@ public class IdBasedBlockDirectory {
 
   public File getRoot() {
     return root;
-  }
-
-  static private byte[] longBytes(long n) {
-      ByteBuffer buffer = ByteBuffer.allocate(Long.SIZE / 8);
-      buffer.putLong(n);
-      return buffer.array();
-  }
-
-  static private long hashBlockId(long n) {
-    return MD5Hash.digest(longBytes(n)).halfDigest();
   }
 
   /**
@@ -72,9 +58,8 @@ public class IdBasedBlockDirectory {
    * @return
    */
   public static File getDirectoryNoCreate(File root, long blockId) {
-    long h = hashBlockId(blockId);
-    int d1 = (int)((h >> 56) & 0xff);
-    int d2 = (int)((h >> 48) & 0xff);
+    int d1 = (int)((blockId >> 8) & 0xff);
+    int d2 = (int)((blockId >> 16) & 0xff);
     StringBuilder sb = new StringBuilder();
     sb.append(DataStorage.BLOCK_SUBDIR_PREFIX + Integer.toHexString(d1)).
         append(SEP).
