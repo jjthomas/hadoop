@@ -58,8 +58,8 @@ public class IdBasedBlockDirectory {
    * @return
    */
   public static File getDirectoryNoCreate(File root, long blockId) {
-    int d1 = (int)((blockId >> 8) & 0xff);
-    int d2 = (int)((blockId >> 16) & 0xff);
+    int d1 = (int)((blockId >> 16) & 0xff);
+    int d2 = (int)((blockId >> 8) & 0xff);
     StringBuilder sb = new StringBuilder();
     sb.append(DataStorage.BLOCK_SUBDIR_PREFIX + Integer.toHexString(d1)).
         append(SEP).
