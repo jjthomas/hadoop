@@ -30,6 +30,8 @@ public class DatanodeUtil {
 
   public static final String DISK_ERROR = "Possible disk error: ";
 
+  private static final String SEP = System.getProperty("file.separator");
+
   /** Get the cause of an I/O exception if caused by a possible disk error
    * @param ioe an I/O exception
    * @return cause if the I/O exception is caused by a possible disk error;
@@ -77,5 +79,22 @@ public class DatanodeUtil {
   /** @return the unlink file. */
   public static File getUnlinkTmpFile(File f) {
     return new File(f.getParentFile(), f.getName()+UNLINK_BLOCK_SUFFIX);
+  }
+
+  /**
+   * Get the directory where a finalized block with this ID should be stored.
+   * Do not attempt to create the directory.
+   * @param root the root directory where finalized blocks are stored
+   * @param blockId
+   * @return
+   */
+  public static File idToBlockDir(File root, long blockId) {
+    int d1 = (int)((blockId >> 16) & 0xff);
+    int d2 = (int)((blockId >> 8) & 0xff);
+    StringBuilder sb = new StringBuilder();
+    sb.append(DataStorage.BLOCK_SUBDIR_PREFIX + Integer.toHexString(d1)).
+        append(SEP).
+        append(DataStorage.BLOCK_SUBDIR_PREFIX + Integer.toHexString(d2));
+    return new File(root, sb.toString());
   }
 }
