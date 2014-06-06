@@ -151,7 +151,7 @@ abstract public class ReplicaInfo extends Block implements Replica {
    * @return the parent directory path where this replica is located
    */
   File getDir() {
-    return hasSubdirs ? IdBasedBlockDirectory.getDirectoryNoCreate(baseDir,
+    return hasSubdirs ? DatanodeUtil.idToBlockDir(baseDir,
         getBlockId()) : baseDir;
   }
 

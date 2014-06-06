@@ -781,7 +781,6 @@ public class DataStorage extends Storage {
   static void linkBlocks(File from, File to, int oldLV, HardLink hl)
   throws IOException {
     boolean upgradeToIdBasedLayout = false;
-    IdBasedBlockDirectory idbd = new IdBasedBlockDirectory(to);
     // If we are upgrading from a version older than the one where we introduced
     // block ID-based layout AND we're working with the finalized directory,
     // we'll need to upgrade from the old flat layout to the block ID-based one
@@ -789,11 +788,11 @@ public class DataStorage extends Storage {
         getLayoutVersion() && to.getName().equals(STORAGE_DIR_FINALIZED)) {
       upgradeToIdBasedLayout = true;
     }
-    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, idbd);
+    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, to);
   }
   
   static void linkBlocksHelper(File from, File to, int oldLV, HardLink hl,
-  boolean upgradeToIdBasedLayout, IdBasedBlockDirectory idbd)
+  boolean upgradeToIdBasedLayout, File blockRoot)
   throws IOException {
     if (!from.exists()) {
       return;
@@ -843,8 +842,14 @@ public class DataStorage extends Storage {
       if (upgradeToIdBasedLayout) {
         for (String blockName : blockNames) {
           long blockId = Block.getBlockId(blockName);
+          File blockLocation = DatanodeUtil.idToBlockDir(blockRoot, blockId);
+          if (!blockLocation.exists()) {
+            if (!blockLocation.mkdirs()) {
+              throw new IOException("Failed to mkdirs " + blockLocation);
+            }
+          }
           HardLink.createHardLink(new File(from, blockName), new File(
-            idbd.getDirectory(blockId), blockName));
+            blockLocation, blockName));
           hl.linkStats.countSingleLinks++;
         }
       } else {
@@ -866,7 +871,8 @@ public class DataStorage extends Storage {
       });
     for(int i = 0; i < otherNames.length; i++)
       linkBlocksHelper(new File(from, otherNames[i]),
-          new File(to, otherNames[i]), oldLV, hl, upgradeToIdBasedLayout, idbd);
+          new File(to, otherNames[i]), oldLV, hl, upgradeToIdBasedLayout,
+            blockRoot);
   }
 
   /**

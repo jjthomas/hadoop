@@ -127,8 +127,8 @@ public class LayoutVersion {
     RESERVED_REL2_4_0(-54, -51, "Reserved for release 2.4.0", true,
         PROTOBUF_FORMAT, EXTENDED_ACL),
     BLOCKID_BASED_LAYOUT(-55,
-        "The block ID of a block uniquely determines its position in the " +
-        "directory structure");
+        "The block ID of a finalized block uniquely determines its position " +
+        "in the directory structure");
 
     private final FeatureInfo info;
 
