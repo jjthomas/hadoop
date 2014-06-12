@@ -452,7 +452,7 @@ public class TestDatanodeBlockScanner {
   
   private static void testReplicaInfoParsingSingle(String subDirPath) {
     File testFile = new File(subDirPath);
-    assertEquals(BASE_PATH, ReplicaInfo.parseBaseDir(testFile));
+    assertEquals(BASE_PATH, ReplicaInfo.parseBaseDir(testFile).baseDirPath);
   }
 
   @Test

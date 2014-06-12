@@ -263,6 +263,20 @@ class FsVolumeImpl implements FsVolumeSpi {
     bpSlices.remove(bpid);
   }
 
+  // dir should exist
+  boolean dirEmpty(File dir) throws IOException {
+    File[] contents = dir.listFiles();
+    if (contents == null) {
+      throw new IOException("Cannot list contents of " + dir);
+    }
+    for (File f : contents) {
+      if (!f.isDirectory() || (f.isDirectory() && !dirEmpty(f))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   boolean isBPDirEmpty(String bpid) throws IOException {
     File volumeCurrentDir = this.getCurrentDir();
     File bpDir = new File(volumeCurrentDir, bpid);
@@ -270,10 +284,10 @@ class FsVolumeImpl implements FsVolumeSpi {
     File finalizedDir = new File(bpCurrentDir,
         DataStorage.STORAGE_DIR_FINALIZED);
     File rbwDir = new File(bpCurrentDir, DataStorage.STORAGE_DIR_RBW);
-    if (finalizedDir.exists() && FileUtil.list(finalizedDir).length != 0) {
+    if (finalizedDir.exists() && !dirEmpty(finalizedDir)) {
       return false;
     }
-    if (rbwDir.exists() && FileUtil.list(rbwDir).length != 0) {
+    if (rbwDir.exists() && !dirEmpty(rbwDir)) {
       return false;
     }
     return true;
@@ -297,7 +311,7 @@ class FsVolumeImpl implements FsVolumeSpi {
       if (!rbwDir.delete()) {
         throw new IOException("Failed to delete " + rbwDir);
       }
-      if (!finalizedDir.delete()) {
+      if (!dirEmpty(finalizedDir) || !FileUtil.fullyDelete(finalizedDir)) {
         throw new IOException("Failed to delete " + finalizedDir);
       }
       FileUtil.fullyDelete(tmpDir);
