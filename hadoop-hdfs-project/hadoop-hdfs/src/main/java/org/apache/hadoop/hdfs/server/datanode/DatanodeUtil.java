@@ -82,6 +82,25 @@ public class DatanodeUtil {
   }
 
   /**
+   * Checks whether there are any files anywhere in the directory tree rooted
+   * at dir (directories don't count as files). dir must exist
+   * @return true if there are no files
+   * @throws IOException if unable to list subdirectories
+   */
+  public static boolean dirNoFilesRecursive(File dir) throws IOException {
+    File[] contents = dir.listFiles();
+    if (contents == null) {
+      throw new IOException("Cannot list contents of " + dir);
+    }
+    for (File f : contents) {
+      if (!f.isDirectory() || (f.isDirectory() && !dirNoFilesRecursive(f))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
    * Get the directory where a finalized block with this ID should be stored.
    * Do not attempt to create the directory.
    * @param root the root directory where finalized blocks are stored
