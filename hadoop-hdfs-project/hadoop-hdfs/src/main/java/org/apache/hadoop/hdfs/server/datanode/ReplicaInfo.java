@@ -183,7 +183,8 @@ abstract public class ReplicaInfo extends Block implements Replica {
     }
   }
 
-  private static class ReplicaDirInfo {
+  @VisibleForTesting
+  public static class ReplicaDirInfo {
     public String baseDirPath;
     public boolean hasSubidrs;
 
