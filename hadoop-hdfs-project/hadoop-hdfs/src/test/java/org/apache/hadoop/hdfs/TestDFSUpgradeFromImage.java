@@ -24,6 +24,7 @@ import static org.junit.Assert.fail;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -77,7 +78,7 @@ public class TestDFSUpgradeFromImage {
     long checksum;
   }
   
-  private static final Configuration upgradeConf;
+  static final Configuration upgradeConf;
   
   static {
     upgradeConf = new HdfsConfiguration();
@@ -92,10 +93,11 @@ public class TestDFSUpgradeFromImage {
   
   boolean printChecksum = false;
   
-  private void unpackStorage(String tarFileName)
+  void unpackStorage(String tarFileName, String referenceName)
       throws IOException {
     String tarFile = System.getProperty("test.cache.data", "build/test/cache")
         + "/" + tarFileName;
+    System.out.println("TAR FILE: " + tarFile);
     String dataDir = System.getProperty("test.build.data", "build/test/data");
     File dfsDir = new File(dataDir, "dfs");
     if ( dfsDir.exists() && !FileUtil.fullyDelete(dfsDir) ) {
@@ -107,7 +109,7 @@ public class TestDFSUpgradeFromImage {
     
     BufferedReader reader = new BufferedReader(new FileReader(
         System.getProperty("test.cache.data", "build/test/cache")
-            + "/" + HADOOP_DFS_DIR_TXT));
+            + "/" + referenceName));
     String line;
     while ( (line = reader.readLine()) != null ) {
       
@@ -282,7 +284,7 @@ public class TestDFSUpgradeFromImage {
    */
   @Test
   public void testUpgradeFromRel22Image() throws IOException {
-    unpackStorage(HADOOP22_IMAGE);
+    unpackStorage(HADOOP22_IMAGE, HADOOP_DFS_DIR_TXT);
     upgradeAndVerify(new MiniDFSCluster.Builder(upgradeConf).
         numDataNodes(4));
   }
@@ -293,7 +295,7 @@ public class TestDFSUpgradeFromImage {
    */
   @Test
   public void testUpgradeFromCorruptRel22Image() throws IOException {
-    unpackStorage(HADOOP22_IMAGE);
+    unpackStorage(HADOOP22_IMAGE, HADOOP_DFS_DIR_TXT);
     
     // Overwrite the md5 stored in the VERSION files
     File baseDir = new File(MiniDFSCluster.getBaseDirectory());
@@ -331,7 +333,7 @@ public class TestDFSUpgradeFromImage {
    */
   @Test
   public void testUpgradeFromRel2ReservedImage() throws Exception {
-    unpackStorage(HADOOP2_RESERVED_IMAGE);
+    unpackStorage(HADOOP2_RESERVED_IMAGE, HADOOP_DFS_DIR_TXT);
     MiniDFSCluster cluster = null;
     // Try it once without setting the upgrade flag to ensure it fails
     final Configuration conf = new Configuration();
@@ -435,7 +437,7 @@ public class TestDFSUpgradeFromImage {
     } while (dirList.hasMore());
   }
   
-  private void upgradeAndVerify(MiniDFSCluster.Builder bld)
+  void upgradeAndVerify(MiniDFSCluster.Builder bld)
       throws IOException {
     MiniDFSCluster cluster = null;
     try {
@@ -464,7 +466,7 @@ public class TestDFSUpgradeFromImage {
    */
   @Test
   public void testUpgradeFromRel1BBWImage() throws IOException {
-    unpackStorage(HADOOP1_BBW_IMAGE);
+    unpackStorage(HADOOP1_BBW_IMAGE, HADOOP_DFS_DIR_TXT);
     Configuration conf = new Configuration(upgradeConf);
     conf.set(DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY, 
         System.getProperty("test.build.data") + File.separator + 
