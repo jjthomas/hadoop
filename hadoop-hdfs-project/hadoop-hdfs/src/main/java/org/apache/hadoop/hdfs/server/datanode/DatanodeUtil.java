@@ -108,12 +108,10 @@ public class DatanodeUtil {
    * @return
    */
   public static File idToBlockDir(File root, long blockId) {
-    int d1 = (int)((blockId >> 24) & 0xff);
-    int d2 = (int)((blockId >> 16) & 0xff);
-    int d3 = (int)((blockId >> 8) & 0xff);
+    int d1 = (int)((blockId >> 16) & 0xff);
+    int d2 = (int)((blockId >> 8) & 0xff);
     String path = DataStorage.BLOCK_SUBDIR_PREFIX + d1 + SEP +
-        DataStorage.BLOCK_SUBDIR_PREFIX + d2 + SEP +
-        DataStorage.BLOCK_SUBDIR_PREFIX + d3;
+        DataStorage.BLOCK_SUBDIR_PREFIX + d2;
     return new File(root, path);
   }
 }
