@@ -570,6 +570,7 @@ public class DirectoryScanner implements Runnable {
   private static class ReportCompiler 
   implements Callable<ScanInfoPerBlockPool> {
     private final FsVolumeSpi volume;
+    private long numFiles = 0;
 
     public ReportCompiler(FsVolumeSpi volume) {
       this.volume = volume;
@@ -579,11 +580,14 @@ public class DirectoryScanner implements Runnable {
     public ScanInfoPerBlockPool call() throws Exception {
       String[] bpList = volume.getBlockPoolList();
       ScanInfoPerBlockPool result = new ScanInfoPerBlockPool(bpList.length);
+      long start = Time.monotonicNow();
       for (String bpid : bpList) {
         LinkedList<ScanInfo> report = new LinkedList<ScanInfo>();
         File bpFinalizedDir = volume.getFinalizedDir(bpid);
         result.put(bpid, compileReport(volume, bpFinalizedDir, report));
       }
+      LOG.info("Time for complete block scan: " + (Time.monotonicNow() - start)
+          / (double) numFiles + " ms/file");
       return result;
     }
 
@@ -614,6 +618,7 @@ public class DirectoryScanner implements Runnable {
           if (isBlockMetaFile("blk_", files[i].getName())) {
             long blockId = Block.getBlockId(files[i].getName());
             report.add(new ScanInfo(blockId, null, files[i], vol));
+            numFiles++;
           }
           continue;
         }
@@ -632,6 +637,7 @@ public class DirectoryScanner implements Runnable {
           }
         }
         report.add(new ScanInfo(blockId, blockFile, metaFile, vol));
+        numFiles += 2;
       }
       return report;
     }

@@ -755,7 +755,7 @@ public abstract class FileSystem extends Configured implements Closeable {
    */
   public abstract FSDataInputStream open(Path f, int bufferSize)
     throws IOException;
-    
+
   /**
    * Opens an FSDataInputStream at the indicated Path.
    * @param f the file to open
