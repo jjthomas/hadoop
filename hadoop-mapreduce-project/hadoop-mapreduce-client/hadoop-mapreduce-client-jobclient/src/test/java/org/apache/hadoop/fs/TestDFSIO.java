@@ -174,7 +174,7 @@ public class TestDFSIO implements Tool {
   }
 
   private static String getBaseDir(Configuration conf) {
-    return conf.get("test.build.data","/benchmarks/TestDFSIO");
+    return conf.get("test.build.data","/home/james/TestDFSIO");
   }
   private static Path getControlDir(Configuration conf) {
     return new Path(getBaseDir(conf), "io_control");
@@ -732,7 +732,11 @@ public class TestDFSIO implements Tool {
 
     config.setInt("test.io.file.buffer.size", bufferSize);
     config.setLong("test.io.skip.size", skipSize);
-    FileSystem fs = FileSystem.get(config);
+    MiniDFSCluster c = new MiniDFSCluster.Builder(config)
+        .numDataNodes(2)
+        .format(true)
+        .build();
+    FileSystem fs = c.getFileSystem();
 
     if (isSequential) {
       long tStart = System.currentTimeMillis();

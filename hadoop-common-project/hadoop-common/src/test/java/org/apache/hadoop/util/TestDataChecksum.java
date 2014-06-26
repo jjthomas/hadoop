@@ -153,25 +153,40 @@ public class TestDataChecksum {
   }
 
   public static void main(String[] args) throws ChecksumException {
-    int dataLength = 100000000;
-    byte[] data = new byte[dataLength];
-    new Random().nextBytes(data);
-    for (DataChecksum.Type type : CHECKSUM_TYPES) {
-      DataChecksum checksum = DataChecksum.newDataChecksum(
-          type, BYTES_PER_CHUNK);
-      int numSums = (dataLength - 1) / checksum.getBytesPerChecksum() + 1;
-      int sumsLength = numSums * checksum.getChecksumSize();
-      ByteBuffer dataBuf = ByteBuffer.wrap(
-          data, 0, dataLength);
-      byte checksums[] = new byte[sumsLength];
-      ByteBuffer checksumBuf = ByteBuffer.wrap(
-          checksums, 0, sumsLength);
-      checksum.calculateChunkedSums(dataBuf, checksumBuf);
-      long t = Time.monotonicNow();
-      checksum.verifyChunkedSums(dataBuf, checksumBuf, "fake file", 0);
-      System.out.println("Time for " + type + " is " + (Time.monotonicNow() - t)
-      + " ms");
+    long sum = 0;
+    for (int i = 0; i < 20; i++) {
+      int dataLength = 100000000;
+      byte[] data = new byte[dataLength];
+      new Random().nextBytes(data);
+      for (DataChecksum.Type type : CHECKSUM_TYPES) {
+        if (type == DataChecksum.Type.CRC32)
+          continue;
+        DataChecksum checksum = DataChecksum.newDataChecksum(
+            type, BYTES_PER_CHUNK);
+        int numSums = (dataLength - 1) / checksum.getBytesPerChecksum() + 1;
+        int sumsLength = numSums * checksum.getChecksumSize();
+        ByteBuffer dataBuf = directify(ByteBuffer.wrap(
+            data, 0, dataLength));
+        byte checksums[] = new byte[sumsLength];
+        ByteBuffer checksumBuf = directify(ByteBuffer.wrap(
+            checksums, 0, sumsLength));
+        checksum.calculateChunkedSums(dataBuf, checksumBuf);
+        long t = System.currentTimeMillis();
+        checksum.verifyChunkedSums(dataBuf, checksumBuf, "fake file", 0);
+        if (i != 0)
+          sum += System.currentTimeMillis() - t;
+        /*
+        PureJavaCrc32C summer = new PureJavaCrc32C();
+        t = System.nanoTime();
+        summer.update(data, 0, dataLength);
+        System.out
+            .println("Java time for " + type + " is " + (System.nanoTime() - t)
+                + " ms");
+        */
+      }
     }
+    System.out.println("Time is " + sum / 19.0
+        + " ms");
   }
 
 }
