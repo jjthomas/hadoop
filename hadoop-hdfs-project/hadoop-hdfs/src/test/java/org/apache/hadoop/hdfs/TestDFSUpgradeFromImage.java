@@ -97,7 +97,6 @@ public class TestDFSUpgradeFromImage {
       throws IOException {
     String tarFile = System.getProperty("test.cache.data", "build/test/cache")
         + "/" + tarFileName;
-    System.out.println("TAR FILE: " + tarFile);
     String dataDir = System.getProperty("test.build.data", "build/test/data");
     File dfsDir = new File(dataDir, "dfs");
     if ( dfsDir.exists() && !FileUtil.fullyDelete(dfsDir) ) {
