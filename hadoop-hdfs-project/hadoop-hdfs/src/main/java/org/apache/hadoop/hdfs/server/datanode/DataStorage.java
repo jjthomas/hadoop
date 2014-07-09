@@ -38,6 +38,8 @@ import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DiskChecker;
+import org.apache.hadoop.util.Shell;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
 
 import java.io.*;
@@ -790,13 +792,19 @@ public class DataStorage extends Storage {
       upgradeToIdBasedLayout = true;
     }
     long t = Time.monotonicNow();
-    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, to);
+    File script = File.createTempFile("links", ".sh");
+    BufferedOutputStream scriptOut = new BufferedOutputStream(new FileOutputStream(script));
+    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, to, scriptOut);
+    scriptOut.write("wait".getBytes());
+    scriptOut.close();
+    // new Shell.ShellCommandExecutor(new String[]{"bash", script.getAbsolutePath()}).execute();
+    // script.delete();
     LOG.info("Milliseconds for linking to " + to.getAbsolutePath() + ": " +
         (Time.monotonicNow() - t));
   }
   
   static void linkBlocksHelper(File from, File to, int oldLV, HardLink hl,
-  boolean upgradeToIdBasedLayout, File blockRoot)
+  boolean upgradeToIdBasedLayout, File blockRoot, OutputStream linkOut)
   throws IOException {
     if (!from.exists()) {
       return;
@@ -852,8 +860,9 @@ public class DataStorage extends Storage {
               throw new IOException("Failed to mkdirs " + blockLocation);
             }
           }
-          HardLink.createHardLink(new File(from, blockName), new File(
+          String[] cmd = HardLink.getHardLinkCommand(new File(from, blockName), new File(
             blockLocation, blockName));
+          linkOut.write((StringUtils.join(" ", cmd) + " &\n").getBytes());
           hl.linkStats.countSingleLinks++;
         }
       } else {
@@ -876,7 +885,7 @@ public class DataStorage extends Storage {
     for(int i = 0; i < otherNames.length; i++)
       linkBlocksHelper(new File(from, otherNames[i]),
           new File(to, otherNames[i]), oldLV, hl, upgradeToIdBasedLayout,
-          blockRoot);
+          blockRoot, linkOut);
   }
 
   /**
