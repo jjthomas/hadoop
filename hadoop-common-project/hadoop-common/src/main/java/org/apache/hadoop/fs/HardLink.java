@@ -18,6 +18,7 @@
 
 package org.apache.hadoop.fs;
 
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -364,12 +365,7 @@ public class HardLink {
    * ****************************************************
    */
 
-  /**
-   * Creates a hardlink 
-   * @param file - existing source file
-   * @param linkName - desired target link file
-   */
-  public static void createHardLink(File file, File linkName) 
+  public static String[] getHardLinkCommand(File file, File linkName)
   throws IOException {
     if (file == null) {
       throw new IOException(
@@ -379,8 +375,20 @@ public class HardLink {
       throw new IOException(
           "invalid arguments to createHardLink: link name is null");
     }
+    return getHardLinkCommand.linkOne(file, linkName);
+  }
+
+   // public static BufferedOutputStream
+
+  /**
+   * Creates a hardlink 
+   * @param file - existing source file
+   * @param linkName - desired target link file
+   */
+  public static void createHardLink(File file, File linkName) 
+  throws IOException {
 	  // construct and execute shell command
-    String[] hardLinkCommand = getHardLinkCommand.linkOne(file, linkName);
+    String[] hardLinkCommand = getHardLinkCommand(file, linkName);
     ShellCommandExecutor shexec = new ShellCommandExecutor(hardLinkCommand);
     try {
       shexec.execute();
