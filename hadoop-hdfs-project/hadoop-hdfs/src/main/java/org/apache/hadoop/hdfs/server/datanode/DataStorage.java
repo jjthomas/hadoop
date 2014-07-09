@@ -38,6 +38,7 @@ import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DiskChecker;
+import org.apache.hadoop.util.Time;
 
 import java.io.*;
 import java.nio.channels.FileLock;
@@ -788,7 +789,10 @@ public class DataStorage extends Storage {
         getLayoutVersion() && to.getName().equals(STORAGE_DIR_FINALIZED)) {
       upgradeToIdBasedLayout = true;
     }
+    long t = Time.monotonicNow();
     linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, to);
+    LOG.info("Milliseconds for linking to " + to.getAbsolutePath() + ": " +
+        (Time.monotonicNow() - t));
   }
   
   static void linkBlocksHelper(File from, File to, int oldLV, HardLink hl,
@@ -872,7 +876,7 @@ public class DataStorage extends Storage {
     for(int i = 0; i < otherNames.length; i++)
       linkBlocksHelper(new File(from, otherNames[i]),
           new File(to, otherNames[i]), oldLV, hl, upgradeToIdBasedLayout,
-            blockRoot);
+          blockRoot);
   }
 
   /**
