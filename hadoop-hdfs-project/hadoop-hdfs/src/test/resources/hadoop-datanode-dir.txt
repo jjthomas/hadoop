@@ -18,6 +18,6 @@
 # Uncomment the following line to produce checksum info for a new DFS image.
 #printChecksums
 
-/small 	 2414293336
+/small 	 2976363016
 overallCRC 	 4099869518
 	
