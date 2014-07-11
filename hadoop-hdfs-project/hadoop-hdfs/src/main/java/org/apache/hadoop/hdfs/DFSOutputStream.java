@@ -395,7 +395,7 @@ public class DFSOutputStream extends FSOutputSummer
         // one chunk that fills up the partial chunk.
         //
         computePacketChunkSize(0, freeInCksum);
-        resetChecksumChunk(freeInCksum);
+        setChecksumBufSize(freeInCksum);
         appendChunk = true;
       } else {
         // if the remaining space in the block is smaller than 
@@ -1712,22 +1712,21 @@ public class DFSOutputStream extends FSOutputSummer
 
   // @see FSOutputSummer#writeChunk()
   @Override
-  protected synchronized void writeChunk(byte[] b, int offset, int len, byte[] checksum) 
-                                                        throws IOException {
+  protected synchronized void writeChunk(byte[] b, int offset, int len,
+      byte[] checksum, int ckoff, int cklen) throws IOException {
     dfsClient.checkOpen();
     checkClosed();
 
-    int cklen = checksum.length;
     int bytesPerChecksum = this.checksum.getBytesPerChecksum(); 
     if (len > bytesPerChecksum) {
       throw new IOException("writeChunk() buffer size is " + len +
                             " is larger than supported  bytesPerChecksum " +
                             bytesPerChecksum);
     }
-    if (checksum.length != this.checksum.getChecksumSize()) {
+    if (cklen != this.checksum.getChecksumSize()) {
       throw new IOException("writeChunk() checksum size is supposed to be " +
                             this.checksum.getChecksumSize() + 
-                            " but found to be " + checksum.length);
+                            " but found to be " + cklen);
     }
 
     if (currentPacket == null) {
@@ -1743,7 +1742,7 @@ public class DFSOutputStream extends FSOutputSummer
       }
     }
 
-    currentPacket.writeChecksum(checksum, 0, cklen);
+    currentPacket.writeChecksum(checksum, ckoff, cklen);
     currentPacket.writeData(b, offset, len);
     currentPacket.numChunks++;
     bytesCurBlock += len;
@@ -1767,7 +1766,7 @@ public class DFSOutputStream extends FSOutputSummer
       // crc chunks from now on.
       if (appendChunk && bytesCurBlock%bytesPerChecksum == 0) {
         appendChunk = false;
-        resetChecksumChunk(bytesPerChecksum);
+        resetChecksumBufSize();
       }
 
       if (!appendChunk) {
