@@ -1301,9 +1301,8 @@ public class FSEditLog implements LogsPurgeable {
 
   /**
    * Return the txid of the last synced transaction.
-   * For test use only
    */
-  synchronized long getSyncTxId() {
+  public synchronized long getSyncTxId() {
     return synctxid;
   }
 
@@ -1490,6 +1489,10 @@ public class FSEditLog implements LogsPurgeable {
   public synchronized Collection<EditLogInputStream> selectInputStreams(
       long fromTxId, long toAtLeastTxId, MetaRecoveryContext recovery,
       boolean inProgressOk) throws IOException {
+    if (state == State.CLOSED) {
+      throw new IllegalStateException("Cannot call selectInputStreams() on " +
+      "closed FSEditLog");
+    }
     List<EditLogInputStream> streams = new ArrayList<EditLogInputStream>();
     selectInputStreams(streams, fromTxId, inProgressOk);
 

@@ -2990,6 +2990,10 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     }
   }
 
+  public DFSInotifyEventInputStream getInotifyEventStream() throws IOException {
+    return new DFSInotifyEventInputStream(namenode);
+  }
+
   @Override // RemotePeerFactory
   public Peer newConnectedPeer(InetSocketAddress addr,
       Token<BlockTokenIdentifier> blockToken, DatanodeID datanodeId)
