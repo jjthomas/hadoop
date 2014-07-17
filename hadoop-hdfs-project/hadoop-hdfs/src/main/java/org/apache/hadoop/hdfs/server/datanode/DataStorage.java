@@ -18,6 +18,8 @@
 
 package org.apache.hadoop.hdfs.server.datanode;
 
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.Futures;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -36,6 +38,7 @@ import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.io.nativeio.NativeIO;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DiskChecker;
 import org.apache.hadoop.util.Shell;
@@ -45,7 +48,13 @@ import org.apache.hadoop.util.Time;
 import java.io.*;
 import java.nio.channels.FileLock;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /** 
  * Data storage information file.
@@ -781,6 +790,16 @@ public class DataStorage extends Storage {
     LOG.info( hardLink.linkStats.report() );
   }
 
+  private static class LinkArgs {
+    public File src;
+    public File dst;
+
+    public LinkArgs(File src, File dst) {
+      this.src = src;
+      this.dst = dst;
+    }
+  }
+
   static void linkBlocks(File from, File to, int oldLV, HardLink hl)
   throws IOException {
     boolean upgradeToIdBasedLayout = false;
@@ -792,19 +811,35 @@ public class DataStorage extends Storage {
       upgradeToIdBasedLayout = true;
     }
     long t = Time.monotonicNow();
-    File script = File.createTempFile("links", ".sh");
-    BufferedOutputStream scriptOut = new BufferedOutputStream(new FileOutputStream(script));
-    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, to, scriptOut);
-    scriptOut.write("wait".getBytes());
-    scriptOut.close();
-    // new Shell.ShellCommandExecutor(new String[]{"bash", script.getAbsolutePath()}).execute();
-    // script.delete();
+    final List<LinkArgs> links = Lists.newArrayList();
+    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, to, links);
+    ExecutorService es = Executors.newFixedThreadPool(12);
+    final int step = links.size() / 12 + 1;
+    List<Future<Void>> futures = Lists.newArrayList();
+    for (int i = 0; i < links.size(); i += step) {
+      final int iCopy = i;
+      futures.add(es.submit(new Callable<Void>() {
+        @Override
+        public Void call() throws IOException {
+          int upperBound = Math.min(iCopy + step, links.size());
+          for (int j = iCopy; j < upperBound; j++) {
+            LinkArgs cur = links.get(j);
+            NativeIO.link(cur.src, cur.dst);
+          }
+          return null;
+        }
+      }));
+    }
+    es.shutdown();
+    for (Future<Void> f : futures) {
+      Futures.get(f, IOException.class);
+    }
     LOG.info("Milliseconds for linking to " + to.getAbsolutePath() + ": " +
         (Time.monotonicNow() - t));
   }
   
   static void linkBlocksHelper(File from, File to, int oldLV, HardLink hl,
-  boolean upgradeToIdBasedLayout, File blockRoot, OutputStream linkOut)
+  boolean upgradeToIdBasedLayout, File blockRoot, List<LinkArgs> links)
   throws IOException {
     if (!from.exists()) {
       return;
@@ -860,9 +895,8 @@ public class DataStorage extends Storage {
               throw new IOException("Failed to mkdirs " + blockLocation);
             }
           }
-          String[] cmd = HardLink.getHardLinkCommand(new File(from, blockName), new File(
-            blockLocation, blockName));
-          linkOut.write((StringUtils.join(" ", cmd) + " &\n").getBytes());
+          links.add(new LinkArgs(new File(from, blockName),
+              new File(blockLocation, blockName)));
           hl.linkStats.countSingleLinks++;
         }
       } else {
@@ -885,7 +919,7 @@ public class DataStorage extends Storage {
     for(int i = 0; i < otherNames.length; i++)
       linkBlocksHelper(new File(from, otherNames[i]),
           new File(to, otherNames[i]), oldLV, hl, upgradeToIdBasedLayout,
-          blockRoot, linkOut);
+          blockRoot, links);
   }
 
   /**
