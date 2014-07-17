@@ -29,6 +29,7 @@ import org.apache.hadoop.fs.CacheFlag;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.hdfs.DFSInotifyEventInputStream;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveEntry;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveInfo;
@@ -274,5 +275,19 @@ public class HdfsAdmin {
   public RemoteIterator<EncryptionZone> listEncryptionZones()
       throws IOException {
     return dfs.listEncryptionZones();
+  }
+
+  /**
+   * Exposes a stream of namesystem events. Only events occurring after
+   * the stream is created are available. See
+   * {@link org.apache.hadoop.hdfs.DFSInotifyEventInputStream} for information
+   * on stream usage. See {@link org.apache.hadoop.hdfs.inotify.Event} for
+   * information on the available events.
+   *
+   * @throws IOException
+   *          If there was an error obtaining the stream.
+   */
+  public DFSInotifyEventInputStream getInotifyEventStream() throws IOException {
+    return dfs.getInotifyEventStream();
   }
 }

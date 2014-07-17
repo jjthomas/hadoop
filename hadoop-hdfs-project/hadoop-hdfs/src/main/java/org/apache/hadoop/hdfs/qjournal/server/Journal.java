@@ -656,9 +656,13 @@ public class Journal implements Closeable {
             true));
       }
     }
-    
+
+    long epoch = -1;
+    synchronized (this) {
+      epoch = lastWriterEpoch.get();
+    }
     return new JournalNodeEditLogManifest(logs, inProgressOk ?
-        lastWriterEpoch.get() : -1);
+        epoch : -1);
   }
 
   /**

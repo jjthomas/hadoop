@@ -16,28 +16,31 @@
  * limitations under the License.
  */
 
-package org.apache.hadoop.hdfs.server.protocol;
+package org.apache.hadoop.hdfs.inotify;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 
 import java.util.List;
 
 /**
- * Includes the lastWrittenEpoch so that readers can determine which
- * in-progress segments reflect the writes of the most recent writer.
- * More discussion of the context available at HDFS-6777.
+ * Contains a set of events and the transaction ID in the edit log up to which
+ * we read to produce these events.
  */
 @InterfaceAudience.Private
-public class JournalNodeEditLogManifest extends RemoteEditLogManifest {
-  private long lastWrittenEpoch;
+public class EventsList {
+  private List<Event> events;
+  private long lastTxid;
 
-  public JournalNodeEditLogManifest(List<RemoteEditLog> logs,
-      long lastWrittenEpoch) {
-    super(logs);
-    this.lastWrittenEpoch = lastWrittenEpoch;
+  public EventsList(List<Event> events, long lastTxid) {
+    this.events = events;
+    this.lastTxid = lastTxid;
   }
 
-  public long getLastWrittenEpoch() {
-    return lastWrittenEpoch;
+  public List<Event> getEvents() {
+    return events;
+  }
+
+  public long getLastTxid() {
+    return lastTxid;
   }
 }

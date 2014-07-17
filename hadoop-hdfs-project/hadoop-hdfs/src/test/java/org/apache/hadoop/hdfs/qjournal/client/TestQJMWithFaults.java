@@ -278,7 +278,7 @@ public class TestQJMWithFaults {
     }
   }
 
-  @Test
+  @Test(timeout = 120000)
   public void testInProgress() throws IOException {
     MiniJournalCluster cluster = new MiniJournalCluster.Builder(conf)
         .build();
@@ -287,7 +287,8 @@ public class TestQJMWithFaults {
       for (int i = 0; i < commands.length; i++) {
         commands[i] = new LoggerCommand();
       }
-      QuorumJournalManager primaryQjm = createOptionallyFaultyQJM(cluster, commands);
+      QuorumJournalManager primaryQjm = createOptionallyFaultyQJM(cluster,
+          commands);
       primaryQjm.format(FAKE_NSINFO);
       primaryQjm.recoverUnfinalizedSegments();
       EditLogOutputStream stm = primaryQjm.startLogSegment(1,
@@ -305,7 +306,8 @@ public class TestQJMWithFaults {
       }
       primaryQjm.close(); // primary fails
 
-      QuorumJournalManager secondaryQjm = createOptionallyFaultyQJM(cluster, commands);
+      QuorumJournalManager secondaryQjm = createOptionallyFaultyQJM(cluster,
+          commands);
       commands[0].doError = true;
       for (int i = 1; i < commands.length; i++) {
         commands[i].doError = false;
@@ -331,7 +333,7 @@ public class TestQJMWithFaults {
       for (EditLogInputStream elis : streams) {
         FSEditLogOp op = null;
         while ((op = elis.readOp()) != null) {
-          assertTrue("Uncomitted transaction returned from in-progress stream",
+          assertTrue("Uncommitted transaction returned from in-progress stream",
               op.getTransactionId() <= 3);
         }
       }
@@ -592,7 +594,8 @@ public class TestQJMWithFaults {
       @Override
       public AsyncLogger createLogger(Configuration conf, NamespaceInfo nsInfo,
           String journalId, InetSocketAddress addr) {
-        assertTrue("More loggers than journals created", count < commands.length);
+        assertTrue("More loggers than journals created", count <
+            commands.length);
         return new OptionallyFaultyChannel(conf, nsInfo, journalId, addr,
             commands[count++]);
       }

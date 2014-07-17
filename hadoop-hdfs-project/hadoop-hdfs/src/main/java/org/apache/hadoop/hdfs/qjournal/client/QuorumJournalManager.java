@@ -50,7 +50,6 @@ import org.apache.hadoop.hdfs.server.namenode.JournalSet;
 import org.apache.hadoop.hdfs.server.protocol.JournalNodeEditLogManifest;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLog;
-import org.apache.hadoop.hdfs.server.protocol.RemoteEditLogManifest;
 import org.apache.hadoop.hdfs.web.URLConnectionFactory;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.util.StringUtils;
@@ -502,7 +501,6 @@ public class QuorumJournalManager implements JournalManager {
         // only the final edit log segment from each JN can possibly be
         // in-progress (other in-progress segments are not returned)
         inProgressStreams.put(lastElis, manifest.getLastWrittenEpoch());
-        System.out.println("EPOCH: " + manifest.getLastWrittenEpoch());
         if (manifest.getLastWrittenEpoch() > maxLastWriterEpoch) {
           maxLastWriterEpoch = manifest.getLastWrittenEpoch();
         }
