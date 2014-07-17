@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.conf.Configuration;
@@ -1442,6 +1443,31 @@ class NameNodeRpcServer implements NamenodeProtocols {
   @Override
   public void removeXAttr(String src, XAttr xAttr) throws IOException {
     namesystem.removeXAttr(src, xAttr);
+  }
+
+  @Override // ClientProtocol
+  public long getCurrentTxid() throws IOException {
+    // for now this is fine, but later we will diverge from getTransactionID()
+    // because we will allow users other than the superuser to access
+    return getTransactionID();
+  }
+
+  @Override // ClientProtocol
+  public List<FSEditLogOp> getEditsFromTxid(long txid) throws IOException {
+    namesystem.checkOperation(OperationCategory.READ); // TODO correct operation type?
+    namesystem.checkSuperuserPrivilege();
+    FSEditLog log = namesystem.getFSImage().getEditLog();
+    Collection<EditLogInputStream> streams = log.selectInputStreams(txid, 0,
+        null, true);
+    List<FSEditLogOp> edits = Lists.newArrayList();
+    for (EditLogInputStream elis : streams) {
+      // TODO check txid continuity invariants
+      FSEditLogOp op = null;
+      while ((op = elis.readOp()) != null) {
+        edits.add(op);
+      }
+    }
+    return edits;
   }
 }
 

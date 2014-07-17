@@ -129,7 +129,7 @@ public class EditsDoubleBuffer {
     return bufReady.size();
   }
   
-  private static class TxnBuffer extends DataOutputBuffer {
+  public static class TxnBuffer extends DataOutputBuffer {
     long firstTxId;
     int numTxns;
     private final Writer writer;

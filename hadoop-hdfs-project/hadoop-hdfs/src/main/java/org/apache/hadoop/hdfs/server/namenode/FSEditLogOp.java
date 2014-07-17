@@ -2255,7 +2255,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @AtMostOnce} for {@link ClientProtocol#rename2} */
-  static class RenameOp extends FSEditLogOp {
+  public static class RenameOp extends FSEditLogOp {
     int length;
     String src;
     String dst;
