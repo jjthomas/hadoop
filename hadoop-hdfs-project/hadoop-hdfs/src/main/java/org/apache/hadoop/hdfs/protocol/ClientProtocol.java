@@ -45,6 +45,7 @@ import org.apache.hadoop.hdfs.protocol.HdfsConstants.RollingUpgradeAction;
 import org.apache.hadoop.hdfs.security.token.block.DataEncryptionKey;
 import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenSelector;
+import org.apache.hadoop.hdfs.server.namenode.FSEditLogOp;
 import org.apache.hadoop.hdfs.server.namenode.NotReplicatedYetException;
 import org.apache.hadoop.hdfs.server.namenode.SafeModeException;
 import org.apache.hadoop.io.EnumSetWritable;
@@ -1339,4 +1340,10 @@ public interface ClientProtocol {
    */
   @Idempotent
   public void removeXAttr(String src, XAttr xAttr) throws IOException;
+
+  @Idempotent
+  public long getCurrentTxid() throws IOException;
+
+  @Idempotent
+  public List<FSEditLogOp> getEditsFromTxid(long txid) throws IOException;
 }

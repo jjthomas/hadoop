@@ -2826,6 +2826,12 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     }
   }
 
+  // TODO create version that takes start txid in the case of client crash
+  // (client remembers last txid and starts from there)
+  public DFSEditInputStream getEditStream() throws IOException {
+    return new DFSEditInputStream(namenode);
+  }
+
   @Override // RemotePeerFactory
   public Peer newConnectedPeer(InetSocketAddress addr,
       Token<BlockTokenIdentifier> blockToken, DatanodeID datanodeId)

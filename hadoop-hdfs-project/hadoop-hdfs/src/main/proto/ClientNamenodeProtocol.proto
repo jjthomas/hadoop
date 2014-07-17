@@ -32,6 +32,7 @@ import "Security.proto";
 import "hdfs.proto";
 import "acl.proto";
 import "xattr.proto";
+import "edits.proto";
 
 /**
  * The ClientNamenodeProtocol Service defines the interface between a client 
@@ -641,6 +642,21 @@ message DeleteSnapshotRequestProto {
 message DeleteSnapshotResponseProto { // void response
 }
 
+message GetCurrentTxidRequestProto {
+}
+
+message GetCurrentTxidResponseProto {
+  required uint64 txid = 1;
+}
+
+message GetEditsFromTxidRequestProto {
+  required uint64 txid = 1;
+}
+
+message GetEditsFromTxidResponseProto {
+  repeated EditProto edits = 1;
+}
+
 service ClientNamenodeProtocol {
   rpc getBlockLocations(GetBlockLocationsRequestProto)
       returns(GetBlockLocationsResponseProto);
@@ -768,4 +784,8 @@ service ClientNamenodeProtocol {
       returns(ListXAttrsResponseProto);
   rpc removeXAttr(RemoveXAttrRequestProto)
       returns(RemoveXAttrResponseProto);
+  rpc getCurrentTxid(GetCurrentTxidRequestProto)
+      returns(GetCurrentTxidResponseProto);
+  rpc getEditsFromTxid(GetEditsFromTxidRequestProto)
+      returns(GetEditsFromTxidResponseProto);
 }

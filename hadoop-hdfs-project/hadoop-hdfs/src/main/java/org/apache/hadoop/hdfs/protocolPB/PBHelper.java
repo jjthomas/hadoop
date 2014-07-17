@@ -19,9 +19,13 @@ package org.apache.hadoop.hdfs.protocolPB;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -90,6 +94,7 @@ import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.CacheP
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.CachePoolStatsProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.CreateFlagProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.DatanodeReportTypeProto;
+import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetEditsFromTxidResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetFsStatsResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RollingUpgradeActionProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RollingUpgradeInfoProto;
@@ -110,6 +115,7 @@ import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.NNHAStatusHe
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.ReceivedDeletedBlockInfoProto;
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.RegisterCommandProto;
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.StorageReportProto;
+import org.apache.hadoop.hdfs.protocol.proto.EditsProtos;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.BlockKeyProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.BlockProto;
@@ -167,6 +173,8 @@ import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.namenode.CheckpointSignature;
+import org.apache.hadoop.hdfs.server.namenode.FSEditLog;
+import org.apache.hadoop.hdfs.server.namenode.FSEditLogOp;
 import org.apache.hadoop.hdfs.server.namenode.INodeId;
 import org.apache.hadoop.hdfs.server.protocol.BalancerBandwidthCommand;
 import org.apache.hadoop.hdfs.server.protocol.BlockCommand;
@@ -2225,6 +2233,33 @@ public class PBHelper {
 
   public static ShmId convert(ShortCircuitShmIdProto shmId) {
     return new ShmId(shmId.getHi(), shmId.getLo());
+  }
+
+  public static List<FSEditLogOp> convert(GetEditsFromTxidResponseProto resp)
+    throws IOException, ClassNotFoundException { // TODO remove these exceptions
+    List<EditsProtos.EditProto> editsProtos = resp.getEditsList();
+    List<FSEditLogOp> edits = Lists.newArrayListWithCapacity(editsProtos.size());
+    for (EditsProtos.EditProto editProto : editsProtos) {
+      ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(
+          editProto.getEdit().toByteArray()));
+      switch(editProto.getType()) {
+      case RENAME: edits.add((FSEditLogOp.RenameOp) ois.readObject());
+      }
+    }
+    return edits;
+  }
+
+  public static GetEditsFromTxidResponseProto convertEditsResponse(
+      List<FSEditLogOp> edits) throws IOException { // TODO remove these exceptions
+    GetEditsFromTxidResponseProto.Builder builder =
+        GetEditsFromTxidResponseProto.newBuilder();
+    for (FSEditLogOp op : edits) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      new ObjectOutputStream(baos).writeObject(op);
+      builder.addEdits(EditsProtos.EditProto.newBuilder().setEdit(
+          ByteString.copyFrom(baos.toByteArray())).build());
+    }
+    return builder.build();
   }
 }
 
