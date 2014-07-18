@@ -274,6 +274,7 @@ public class DataStorage extends Storage {
           STORAGE_DIR_CURRENT));
       bpDataDirs.add(bpRoot);
     }
+
     // mkdir for the list of BlockPoolStorage
     makeBlockPoolDataDir(bpDataDirs, null);
     BlockPoolSliceStorage bpStorage = new BlockPoolSliceStorage(
@@ -501,7 +502,7 @@ public class DataStorage extends Storage {
     
     // do upgrade
     if (this.layoutVersion > HdfsConstants.DATANODE_LAYOUT_VERSION) {
-      doUpgrade(sd, nsInfo);  // upgrade
+      doUpgrade(datanode, sd, nsInfo);  // upgrade
       return;
     }
     
@@ -536,7 +537,8 @@ public class DataStorage extends Storage {
    * @param sd  storage directory
    * @throws IOException on error
    */
-  void doUpgrade(StorageDirectory sd, NamespaceInfo nsInfo) throws IOException {
+  void doUpgrade(DataNode datanode, StorageDirectory sd, NamespaceInfo nsInfo)
+      throws IOException {
     // If the existing on-disk layout version supportes federation, simply
     // update its layout version.
     if (DataNodeLayoutVersion.supports(
@@ -581,7 +583,8 @@ public class DataStorage extends Storage {
     BlockPoolSliceStorage bpStorage = new BlockPoolSliceStorage(nsInfo.getNamespaceID(), 
         nsInfo.getBlockPoolID(), nsInfo.getCTime(), nsInfo.getClusterID());
     bpStorage.format(curDir, nsInfo);
-    linkAllBlocks(tmpDir, bbwDir, new File(curBpDir, STORAGE_DIR_CURRENT));
+    linkAllBlocks(datanode, tmpDir, bbwDir, new File(curBpDir,
+        STORAGE_DIR_CURRENT));
     
     // 4. Write version file under <SD>/current
     layoutVersion = HdfsConstants.DATANODE_LAYOUT_VERSION;
@@ -759,22 +762,22 @@ public class DataStorage extends Storage {
    *
    * @throws IOException If error occurs during hardlink
    */
-  private void linkAllBlocks(File fromDir, File fromBbwDir, File toDir)
-      throws IOException {
+  private void linkAllBlocks(DataNode datanode, File fromDir, File fromBbwDir,
+      File toDir) throws IOException {
     HardLink hardLink = new HardLink();
     // do the link
     int diskLayoutVersion = this.getLayoutVersion();
     if (DataNodeLayoutVersion.supports(
         LayoutVersion.Feature.APPEND_RBW_DIR, diskLayoutVersion)) {
       // hardlink finalized blocks in tmpDir/finalized
-      linkBlocks(new File(fromDir, STORAGE_DIR_FINALIZED), 
+      linkBlocks(datanode, new File(fromDir, STORAGE_DIR_FINALIZED),
           new File(toDir, STORAGE_DIR_FINALIZED), diskLayoutVersion, hardLink);
       // hardlink rbw blocks in tmpDir/rbw
-      linkBlocks(new File(fromDir, STORAGE_DIR_RBW), 
+      linkBlocks(datanode, new File(fromDir, STORAGE_DIR_RBW),
           new File(toDir, STORAGE_DIR_RBW), diskLayoutVersion, hardLink);
     } else { // pre-RBW version
       // hardlink finalized blocks in tmpDir
-      linkBlocks(fromDir, new File(toDir, STORAGE_DIR_FINALIZED), 
+      linkBlocks(datanode, fromDir, new File(toDir, STORAGE_DIR_FINALIZED),
           diskLayoutVersion, hardLink);      
       if (fromBbwDir.exists()) {
         /*
@@ -783,7 +786,7 @@ public class DataStorage extends Storage {
          * NOT underneath the 'current' directory in those releases.  See
          * HDFS-3731 for details.
          */
-        linkBlocks(fromBbwDir,
+        linkBlocks(datanode, fromBbwDir,
             new File(toDir, STORAGE_DIR_RBW), diskLayoutVersion, hardLink);
       }
     } 
@@ -800,8 +803,8 @@ public class DataStorage extends Storage {
     }
   }
 
-  static void linkBlocks(File from, File to, int oldLV, HardLink hl)
-  throws IOException {
+  static void linkBlocks(DataNode datanode, File from, File to, int oldLV,
+      HardLink hl) throws IOException {
     boolean upgradeToIdBasedLayout = false;
     // If we are upgrading from a version older than the one where we introduced
     // block ID-based layout AND we're working with the finalized directory,
@@ -810,37 +813,40 @@ public class DataStorage extends Storage {
         getLayoutVersion() && to.getName().equals(STORAGE_DIR_FINALIZED)) {
       upgradeToIdBasedLayout = true;
     }
-    long t = Time.monotonicNow();
-    final List<LinkArgs> links = Lists.newArrayList();
-    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, to, links);
-    ExecutorService es = Executors.newFixedThreadPool(12);
-    final int step = links.size() / 12 + 1;
+
+    final List<LinkArgs> idBasedLayoutSingleLinks = Lists.newArrayList();
+    linkBlocksHelper(from, to, oldLV, hl, upgradeToIdBasedLayout, to,
+        idBasedLayoutSingleLinks);
+    int numLinkWorkers = datanode.getConf().getInt(
+        DFSConfigKeys.DFS_DATANODE_BLOCK_ID_LAYOUT_UPGRADE_THREADS_KEY,
+        DFSConfigKeys.DFS_DATANODE_BLOCK_ID_LAYOUT_UPGRADE_THREADS);
+    ExecutorService linkWorkers = Executors.newFixedThreadPool(numLinkWorkers);
+    final int step = idBasedLayoutSingleLinks.size() / numLinkWorkers + 1;
     List<Future<Void>> futures = Lists.newArrayList();
-    for (int i = 0; i < links.size(); i += step) {
+    for (int i = 0; i < idBasedLayoutSingleLinks.size(); i += step) {
       final int iCopy = i;
-      futures.add(es.submit(new Callable<Void>() {
+      futures.add(linkWorkers.submit(new Callable<Void>() {
         @Override
         public Void call() throws IOException {
-          int upperBound = Math.min(iCopy + step, links.size());
+          int upperBound = Math.min(iCopy + step,
+              idBasedLayoutSingleLinks.size());
           for (int j = iCopy; j < upperBound; j++) {
-            LinkArgs cur = links.get(j);
+            LinkArgs cur = idBasedLayoutSingleLinks.get(j);
             NativeIO.link(cur.src, cur.dst);
           }
           return null;
         }
       }));
     }
-    es.shutdown();
+    linkWorkers.shutdown();
     for (Future<Void> f : futures) {
       Futures.get(f, IOException.class);
     }
-    LOG.info("Milliseconds for linking to " + to.getAbsolutePath() + ": " +
-        (Time.monotonicNow() - t));
   }
   
   static void linkBlocksHelper(File from, File to, int oldLV, HardLink hl,
-  boolean upgradeToIdBasedLayout, File blockRoot, List<LinkArgs> links)
-  throws IOException {
+  boolean upgradeToIdBasedLayout, File blockRoot,
+      List<LinkArgs> idBasedLayoutSingleLinks) throws IOException {
     if (!from.exists()) {
       return;
     }
@@ -895,7 +901,7 @@ public class DataStorage extends Storage {
               throw new IOException("Failed to mkdirs " + blockLocation);
             }
           }
-          links.add(new LinkArgs(new File(from, blockName),
+          idBasedLayoutSingleLinks.add(new LinkArgs(new File(from, blockName),
               new File(blockLocation, blockName)));
           hl.linkStats.countSingleLinks++;
         }
@@ -919,7 +925,7 @@ public class DataStorage extends Storage {
     for(int i = 0; i < otherNames.length; i++)
       linkBlocksHelper(new File(from, otherNames[i]),
           new File(to, otherNames[i]), oldLV, hl, upgradeToIdBasedLayout,
-          blockRoot, links);
+          blockRoot, idBasedLayoutSingleLinks);
   }
 
   /**
