@@ -487,7 +487,7 @@ public class QuorumJournalManager implements JournalManager {
 
         EditLogInputStream elis = EditLogFileInputStream.fromUrl(
             connectionFactory, url, remoteLog.getStartTxId(),
-            remoteLog.getEndTxId(), remoteLog.isInProgress());
+            remoteLog.getEndTxId(), remoteLog.isInProgress(), false);
         allStreams.add(elis);
       }
     }

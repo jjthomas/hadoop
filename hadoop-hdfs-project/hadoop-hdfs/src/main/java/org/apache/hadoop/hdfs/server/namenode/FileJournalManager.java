@@ -283,16 +283,18 @@ public class FileJournalManager implements JournalManager {
   @Override
   synchronized public void selectInputStreams(
       Collection<EditLogInputStream> streams, long fromTxId,
-      boolean inProgressOk) throws IOException {
+      boolean inProgressOk, boolean supportRawBytesForEdits) throws IOException {
     List<EditLogFile> elfs = matchEditLogs(sd.getCurrentDir());
     LOG.debug(this + ": selecting input streams starting at " + fromTxId + 
         (inProgressOk ? " (inProgress ok) " : " (excluding inProgress) ") +
         "from among " + elfs.size() + " candidate file(s)");
-    addStreamsToCollectionFromFiles(elfs, streams, fromTxId, inProgressOk);
+    addStreamsToCollectionFromFiles(elfs, streams, fromTxId, inProgressOk,
+                                    supportRawBytesForEdits);
   }
   
   static void addStreamsToCollectionFromFiles(Collection<EditLogFile> elfs,
-      Collection<EditLogInputStream> streams, long fromTxId, boolean inProgressOk) {
+      Collection<EditLogInputStream> streams, long fromTxId,
+      boolean inProgressOk, boolean supportRawBytesForEdits) {
     for (EditLogFile elf : elfs) {
       if (elf.isInProgress()) {
         if (!inProgressOk) {
@@ -316,7 +318,8 @@ public class FileJournalManager implements JournalManager {
         continue;
       }
       EditLogFileInputStream elfis = new EditLogFileInputStream(elf.getFile(),
-            elf.getFirstTxId(), elf.getLastTxId(), elf.isInProgress());
+            elf.getFirstTxId(), elf.getLastTxId(), elf.isInProgress(),
+            supportRawBytesForEdits);
       LOG.debug("selecting edit log stream " + elf);
       streams.add(elfis);
     }

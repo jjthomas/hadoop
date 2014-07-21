@@ -34,7 +34,7 @@ import java.io.IOException;
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public abstract class EditLogInputStream implements Closeable {
-  private FSEditLogOp cachedOp = null; 
+  private FSEditLogOp cachedOp = null;
 
   /**
    * Returns the name of the currently active underlying stream.  The default

@@ -61,6 +61,8 @@ public class EditLogFileInputStream extends EditLogInputStream {
   private final long lastTxId;
   private final boolean isInProgress;
   private int maxOpSize;
+  private boolean supportRawBytes;
+
   static private enum State {
     UNINIT,
     OPEN,
@@ -96,7 +98,12 @@ public class EditLogFileInputStream extends EditLogInputStream {
    */
   public EditLogFileInputStream(File name, long firstTxId, long lastTxId,
       boolean isInProgress) {
-    this(new FileLog(name), firstTxId, lastTxId, isInProgress);
+    this(name, firstTxId, lastTxId, isInProgress, false);
+  }
+
+  public EditLogFileInputStream(File name, long firstTxId, long lastTxId,
+      boolean isInProgress, boolean supportRawBytes) {
+    this(new FileLog(name), firstTxId, lastTxId, isInProgress, supportRawBytes);
   }
   
   /**
@@ -116,20 +123,21 @@ public class EditLogFileInputStream extends EditLogInputStream {
    */
   public static EditLogInputStream fromUrl(
       URLConnectionFactory connectionFactory, URL url, long startTxId,
-      long endTxId, boolean inProgress) {
+      long endTxId, boolean inProgress, boolean supportRawBytes) {
     return new EditLogFileInputStream(new URLLog(connectionFactory, url),
-        startTxId, endTxId, inProgress);
+        startTxId, endTxId, inProgress, supportRawBytes);
   }
   
   private EditLogFileInputStream(LogSource log,
       long firstTxId, long lastTxId,
-      boolean isInProgress) {
+      boolean isInProgress, boolean supportRawBytes) {
       
     this.log = log;
     this.firstTxId = firstTxId;
     this.lastTxId = lastTxId;
     this.isInProgress = isInProgress;
     this.maxOpSize = DFSConfigKeys.DFS_NAMENODE_MAX_OP_SIZE_DEFAULT;
+    this.supportRawBytes = supportRawBytes;
   }
 
   private void init(boolean verifyLayoutVersion)

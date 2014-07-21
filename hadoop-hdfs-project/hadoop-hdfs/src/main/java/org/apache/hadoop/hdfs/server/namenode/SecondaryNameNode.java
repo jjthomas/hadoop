@@ -883,7 +883,7 @@ public class SecondaryNameNode implements Runnable,
 
       @Override
       public void selectInputStreams(Collection<EditLogInputStream> streams,
-          long fromTxId, boolean inProgressOk) {
+          long fromTxId, boolean inProgressOk, boolean supportRawBytesForEdits) {
         Iterator<StorageDirectory> iter = storage.dirIterator();
         while (iter.hasNext()) {
           StorageDirectory dir = iter.next();
@@ -895,7 +895,7 @@ public class SecondaryNameNode implements Runnable,
             throw new RuntimeException(ioe);
           }
           FileJournalManager.addStreamsToCollectionFromFiles(editFiles, streams,
-              fromTxId, inProgressOk);
+              fromTxId, inProgressOk, supportRawBytesForEdits);
         }
       }
       

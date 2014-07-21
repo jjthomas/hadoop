@@ -42,10 +42,13 @@ interface LogsPurgeable {
    * 
    * @param fromTxId the first transaction id we want to read
    * @param inProgressOk whether or not in-progress streams should be returned
+   * @param supportRawBytesForEdits the supplied EditLogInputStreams will produce
+   *                                FSEditLogOps that include their raw bytes
    * @throws IOException if the underlying storage has an error or is otherwise
    * inaccessible
    */
   void selectInputStreams(Collection<EditLogInputStream> streams,
-      long fromTxId, boolean inProgressOk) throws IOException;
+      long fromTxId, boolean inProgressOk, boolean supportRawBytesForEdits)
+      throws IOException;
   
 }

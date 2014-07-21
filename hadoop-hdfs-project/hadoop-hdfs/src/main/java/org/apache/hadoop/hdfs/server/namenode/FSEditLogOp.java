@@ -62,12 +62,15 @@ import static org.apache.hadoop.hdfs.server.namenode.FSEditLogOpCodes.OP_TIMES;
 import static org.apache.hadoop.hdfs.server.namenode.FSEditLogOpCodes.OP_UPDATE_BLOCKS;
 import static org.apache.hadoop.hdfs.server.namenode.FSEditLogOpCodes.OP_UPDATE_MASTER_KEY;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.EOFException;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -139,6 +142,7 @@ public abstract class FSEditLogOp {
   long txid = HdfsConstants.INVALID_TXID;
   byte[] rpcClientId = RpcConstants.DUMMY_CLIENT_ID;
   int rpcCallId = RpcConstants.INVALID_CALL_ID;
+  byte[] rawBytes; // includes checksum if present
 
   final public static class OpInstanceCache {
     private final EnumMap<FSEditLogOpCodes, FSEditLogOp> inst =
@@ -260,6 +264,13 @@ public abstract class FSEditLogOp {
   public void setRpcCallId(int callId) {
     this.rpcCallId = callId;
   }
+
+  /**
+   *
+   * @return raw bytes of this edit log op, including checksum (if used), or
+   * null if not available
+   */
+  public byte[] getRawBytes() { return rawBytes; }
 
   abstract void readFields(DataInputStream in, int logVersion)
       throws IOException;
@@ -3818,6 +3829,63 @@ public abstract class FSEditLogOp {
    * Class for reading editlog ops from a stream
    */
   public static class Reader {
+
+    /**
+     * DO NOT use reset() when reading bytes from this stream while it is in the
+     * save state -- the saved bytes will include multiple copies of any data
+     * that has been read multiple times.
+     */
+    private static class ByteSavingInputStream extends FilterInputStream {
+      private boolean save;
+      private ByteArrayOutputStream savedBytes;
+
+      public ByteSavingInputStream(InputStream is) { super(is); }
+
+      public void startSaving() {
+        save = true;
+        savedBytes = new ByteArrayOutputStream();
+      }
+
+      public byte[] getSavedBytes() {
+        if (!save) {
+          throw new IllegalStateException("Not in save state");
+        }
+        save = false;
+        return savedBytes.toByteArray();
+      }
+
+      public void stopSaving() {
+        save = false;
+      }
+
+      @Override
+      public int read() throws IOException {
+        int ret = super.read();
+        if (ret != -1 && save) {
+          savedBytes.write(ret);
+        }
+        return ret;
+      }
+
+      @Override
+      public int read(byte[] data) throws IOException {
+        int ret = super.read(data);
+        if (ret > 0 && save) {
+          savedBytes.write(data, 0, ret);
+        }
+        return ret;
+      }
+
+      @Override
+      public int read(byte[] data, int offset, int length) throws IOException {
+        int ret = super.read(data, offset, length);
+        if (ret > 0 && save) {
+          savedBytes.write(data, offset, ret);
+        }
+        return ret;
+      }
+    }
+
     private final DataInputStream in;
     private final StreamLimiter limiter;
     private final int logVersion;
@@ -3825,6 +3893,8 @@ public abstract class FSEditLogOp {
     private final OpInstanceCache cache;
     private int maxOpSize;
     private final boolean supportEditLogLength;
+    private final boolean supportRawBytes;
+    private ByteSavingInputStream bsis;
 
     /**
      * Construct the reader
@@ -3832,6 +3902,11 @@ public abstract class FSEditLogOp {
      * @param logVersion The version of the data coming from the stream.
      */
     public Reader(DataInputStream in, StreamLimiter limiter, int logVersion) {
+      this(in, limiter, logVersion, false);
+    }
+
+    public Reader(DataInputStream in, StreamLimiter limiter, int logVersion,
+        boolean supportRawBytes) {
       this.logVersion = logVersion;
       if (NameNodeLayoutVersion.supports(
           LayoutVersion.Feature.EDITS_CHESKUM, logVersion)) {
@@ -3845,6 +3920,12 @@ public abstract class FSEditLogOp {
       this.supportEditLogLength = NameNodeLayoutVersion.supports(
           NameNodeLayoutVersion.Feature.EDITLOG_LENGTH, logVersion)
           || logVersion < NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION;
+
+      this.supportRawBytes = supportRawBytes;
+      if (supportRawBytes) {
+        bsis = new ByteSavingInputStream(in);
+        in = new DataInputStream(bsis);
+      }
 
       if (this.checksum != null) {
         this.in = new DataInputStream(
@@ -3960,6 +4041,11 @@ public abstract class FSEditLogOp {
         checksum.reset();
       }
 
+      if (supportRawBytes) {
+        bsis.startSaving();
+      }
+      byte[] rawBytes = null;
+
       byte opCodeByte;
       try {
         opCodeByte = in.readByte();
@@ -3970,30 +4056,41 @@ public abstract class FSEditLogOp {
 
       FSEditLogOpCodes opCode = FSEditLogOpCodes.fromByte(opCodeByte);
       if (opCode == OP_INVALID) {
+        if (supportRawBytes) {
+          bsis.stopSaving(); // wasted effort to save bytes read in verifyTerminator
+        }
         verifyTerminator();
         return null;
       }
 
       FSEditLogOp op = cache.get(opCode);
-      if (op == null) {
-        throw new IOException("Read invalid opcode " + opCode);
+      try {
+        if (op == null) {
+          throw new IOException("Read invalid opcode " + opCode);
+        }
+
+        if (supportEditLogLength) {
+          in.readInt();
+        }
+
+        if (NameNodeLayoutVersion.supports(
+            LayoutVersion.Feature.STORED_TXIDS, logVersion)) {
+          // Read the txid
+          op.setTransactionId(in.readLong());
+        } else {
+          op.setTransactionId(HdfsConstants.INVALID_TXID);
+        }
+
+        op.readFields(in, logVersion);
+
+        validateChecksum(in, checksum, op.txid);
+      } finally {
+        if (supportRawBytes) {
+          rawBytes = bsis.getSavedBytes(); // make sure we always stop saving
+        }
       }
 
-      if (supportEditLogLength) {
-        in.readInt();
-      }
-
-      if (NameNodeLayoutVersion.supports(
-          LayoutVersion.Feature.STORED_TXIDS, logVersion)) {
-        // Read the txid
-        op.setTransactionId(in.readLong());
-      } else {
-        op.setTransactionId(HdfsConstants.INVALID_TXID);
-      }
-
-      op.readFields(in, logVersion);
-
-      validateChecksum(in, checksum, op.txid);
+      op.rawBytes = rawBytes;
       return op;
     }
 

@@ -1469,8 +1469,10 @@ public class FSEditLog implements LogsPurgeable {
 
   @Override
   public void selectInputStreams(Collection<EditLogInputStream> streams,
-      long fromTxId, boolean inProgressOk) throws IOException {
-    journalSet.selectInputStreams(streams, fromTxId, inProgressOk);
+      long fromTxId, boolean inProgressOk, boolean supportRawBytesForEdits)
+      throws IOException {
+    journalSet.selectInputStreams(streams, fromTxId, inProgressOk,
+        supportRawBytesForEdits);
   }
 
   public Collection<EditLogInputStream> selectInputStreams(
@@ -1488,7 +1490,7 @@ public class FSEditLog implements LogsPurgeable {
    */
   public synchronized Collection<EditLogInputStream> selectInputStreams(
       long fromTxId, long toAtLeastTxId, MetaRecoveryContext recovery,
-      boolean inProgressOk) throws IOException {
+      boolean inProgressOk, boolean supportRawBytesForEdits) throws IOException {
     List<EditLogInputStream> streams = new ArrayList<EditLogInputStream>();
     selectInputStreams(streams, fromTxId, inProgressOk);
 
