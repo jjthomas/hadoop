@@ -281,9 +281,21 @@ public class JournalSet implements JournalManager {
       if (acc.isEmpty()) {
         acc.add(elis);
       } else {
-        long accFirstTxId = acc.get(0).getFirstTxId();
+        EditLogInputStream accFirst = acc.get(0);
+        long accFirstTxId = accFirst.getFirstTxId();
         if (accFirstTxId == elis.getFirstTxId()) {
-          acc.add(elis);
+          // if we have a finalized log segment available at this txid,
+          // we should throw out all in-progress segments at this txid
+          if (elis.isInProgress()) {
+            if (accFirst.isInProgress()) {
+              acc.add(elis);
+            }
+          } else {
+            if (accFirst.isInProgress()) {
+              acc.clear();
+            }
+            acc.add(elis);
+          }
         } else if (accFirstTxId < elis.getFirstTxId()) {
           outStreams.add(new RedundantEditLogInputStream(acc, fromTxId));
           acc.clear();

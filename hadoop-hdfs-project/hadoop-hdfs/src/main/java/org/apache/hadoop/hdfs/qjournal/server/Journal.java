@@ -51,6 +51,7 @@ import org.apache.hadoop.hdfs.server.namenode.FileJournalManager;
 import org.apache.hadoop.hdfs.server.namenode.FileJournalManager.EditLogFile;
 import org.apache.hadoop.hdfs.server.namenode.JournalManager;
 import org.apache.hadoop.hdfs.server.namenode.TransferFsImage;
+import org.apache.hadoop.hdfs.server.protocol.JournalNodeEditLogManifest;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLog;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLogManifest;
@@ -633,7 +634,7 @@ public class Journal implements Closeable {
   /**
    * @see QJournalProtocol#getEditLogManifest(String, long, boolean)
    */
-  public RemoteEditLogManifest getEditLogManifest(long sinceTxId,
+  public JournalNodeEditLogManifest getEditLogManifest(long sinceTxId,
       boolean inProgressOk) throws IOException {
     // No need to checkRequest() here - anyone may ask for the list
     // of segments.
@@ -651,11 +652,13 @@ public class Journal implements Closeable {
         }
       }
       if (log != null && log.isInProgress()) {
-        logs.add(new RemoteEditLog(log.getStartTxId(), getHighestWrittenTxId()));
+        logs.add(new RemoteEditLog(log.getStartTxId(), getHighestWrittenTxId(),
+            true));
       }
     }
     
-    return new RemoteEditLogManifest(logs);
+    return new JournalNodeEditLogManifest(logs, inProgressOk ?
+        lastWriterEpoch.get() : -1);
   }
 
   /**

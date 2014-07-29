@@ -159,6 +159,7 @@ import org.apache.hadoop.hdfs.protocol.proto.XAttrProtos.ListXAttrsResponseProto
 import org.apache.hadoop.hdfs.protocol.proto.XAttrProtos.XAttrProto;
 import org.apache.hadoop.hdfs.protocol.proto.XAttrProtos.XAttrProto.XAttrNamespaceProto;
 import org.apache.hadoop.hdfs.protocol.proto.XAttrProtos.XAttrSetFlagProto;
+import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos;
 import org.apache.hadoop.hdfs.security.token.block.BlockKey;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
 import org.apache.hadoop.hdfs.security.token.block.DataEncryptionKey;
@@ -186,6 +187,7 @@ import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage.State;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorageReport;
 import org.apache.hadoop.hdfs.server.protocol.FinalizeCommand;
 import org.apache.hadoop.hdfs.server.protocol.JournalInfo;
+import org.apache.hadoop.hdfs.server.protocol.JournalNodeEditLogManifest;
 import org.apache.hadoop.hdfs.server.protocol.KeyUpdateCommand;
 import org.apache.hadoop.hdfs.server.protocol.NNHAStatusHeartbeat;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeCommand;
@@ -450,14 +452,25 @@ public class PBHelper {
     return builder.build();
   }
 
-  public static RemoteEditLogManifest convert(
-      RemoteEditLogManifestProto manifest) {
+  private static List<RemoteEditLog> getLogList(RemoteEditLogManifestProto
+      manifest) {
     List<RemoteEditLog> logs = new ArrayList<RemoteEditLog>(manifest
         .getLogsList().size());
     for (RemoteEditLogProto l : manifest.getLogsList()) {
       logs.add(convert(l));
     }
-    return new RemoteEditLogManifest(logs);
+    return logs;
+  }
+
+  public static RemoteEditLogManifest convert(
+      RemoteEditLogManifestProto manifest) {
+    return new RemoteEditLogManifest(getLogList(manifest));
+  }
+
+  public static JournalNodeEditLogManifest convert(
+      QJournalProtocolProtos.GetEditLogManifestResponseProto proto) {
+    return new JournalNodeEditLogManifest(getLogList(proto.getManifest()),
+        proto.getLastWriterEpoch());
   }
 
   public static CheckpointCommandProto convert(CheckpointCommand cmd) {

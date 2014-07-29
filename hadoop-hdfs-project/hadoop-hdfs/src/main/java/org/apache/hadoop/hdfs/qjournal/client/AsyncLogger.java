@@ -28,6 +28,7 @@ import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.PrepareRe
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.SegmentStateProto;
 import org.apache.hadoop.hdfs.qjournal.protocol.RequestInfo;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
+import org.apache.hadoop.hdfs.server.protocol.JournalNodeEditLogManifest;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLogManifest;
 
@@ -110,7 +111,7 @@ interface AsyncLogger {
   /**
    * Fetch the list of edit logs available on the remote node.
    */
-  public ListenableFuture<RemoteEditLogManifest> getEditLogManifest(
+  public ListenableFuture<JournalNodeEditLogManifest> getEditLogManifest(
       long fromTxnId, boolean inProgressOk);
 
   /**
