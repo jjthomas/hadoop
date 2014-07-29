@@ -29,6 +29,7 @@ import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.concurrent.TimeoutException;
 
+import com.google.common.collect.Maps;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -46,6 +47,7 @@ import org.apache.hadoop.hdfs.server.namenode.EditLogInputStream;
 import org.apache.hadoop.hdfs.server.namenode.EditLogOutputStream;
 import org.apache.hadoop.hdfs.server.namenode.JournalManager;
 import org.apache.hadoop.hdfs.server.namenode.JournalSet;
+import org.apache.hadoop.hdfs.server.protocol.JournalNodeEditLogManifest;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLog;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLogManifest;
@@ -466,9 +468,9 @@ public class QuorumJournalManager implements JournalManager {
   public void selectInputStreams(Collection<EditLogInputStream> streams,
       long fromTxnId, boolean inProgressOk) throws IOException {
 
-    QuorumCall<AsyncLogger, RemoteEditLogManifest> q =
+    QuorumCall<AsyncLogger, JournalNodeEditLogManifest> q =
         loggers.getEditLogManifest(fromTxnId, inProgressOk);
-    Map<AsyncLogger, RemoteEditLogManifest> resps =
+    Map<AsyncLogger, JournalNodeEditLogManifest> resps =
         loggers.waitForWriteQuorum(q, selectInputStreamsTimeoutMs,
             "selectInputStreams");
     
@@ -478,10 +480,15 @@ public class QuorumJournalManager implements JournalManager {
     final PriorityQueue<EditLogInputStream> allStreams = 
         new PriorityQueue<EditLogInputStream>(64,
             JournalSet.EDIT_LOG_INPUT_STREAM_COMPARATOR);
-    for (Map.Entry<AsyncLogger, RemoteEditLogManifest> e : resps.entrySet()) {
+
+    long maxLastWriterEpoch = -1;
+    Map<EditLogInputStream, Long> inProgressStreams = Maps.newHashMap();
+
+    for (Map.Entry<AsyncLogger, JournalNodeEditLogManifest> e : resps.entrySet()) {
       AsyncLogger logger = e.getKey();
-      RemoteEditLogManifest manifest = e.getValue();
-      
+      JournalNodeEditLogManifest manifest = e.getValue();
+
+      EditLogInputStream lastElis = null;
       for (RemoteEditLog remoteLog : manifest.getLogs()) {
         URL url = logger.buildURLToFetchLogs(remoteLog.getStartTxId());
 
@@ -489,8 +496,27 @@ public class QuorumJournalManager implements JournalManager {
             connectionFactory, url, remoteLog.getStartTxId(),
             remoteLog.getEndTxId(), remoteLog.isInProgress());
         allStreams.add(elis);
+        lastElis = elis;
+      }
+      if (lastElis != null && lastElis.isInProgress()) {
+        // only the final edit log segment from each JN can possibly be
+        // in-progress (other in-progress segments are not returned)
+        inProgressStreams.put(lastElis, manifest.getLastWrittenEpoch());
+        System.out.println("EPOCH: " + manifest.getLastWrittenEpoch());
+        if (manifest.getLastWrittenEpoch() > maxLastWriterEpoch) {
+          maxLastWriterEpoch = manifest.getLastWrittenEpoch();
+        }
       }
     }
+
+    // any in-progress streams from a old writer may contain uncommitted edits,
+    // so we should discard them
+    for (Entry<EditLogInputStream, Long> e : inProgressStreams.entrySet()) {
+      if (e.getValue() < maxLastWriterEpoch) {
+        allStreams.remove(e.getKey());
+      }
+    }
+
     JournalSet.chainAndMakeRedundantStreams(streams, allStreams, fromTxnId);
   }
   

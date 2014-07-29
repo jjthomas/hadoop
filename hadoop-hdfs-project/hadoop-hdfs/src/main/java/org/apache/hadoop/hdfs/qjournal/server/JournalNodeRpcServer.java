@@ -38,6 +38,7 @@ import org.apache.hadoop.hdfs.qjournal.protocol.RequestInfo;
 import org.apache.hadoop.hdfs.qjournal.protocolPB.QJournalProtocolPB;
 import org.apache.hadoop.hdfs.qjournal.protocolPB.QJournalProtocolServerSideTranslatorPB;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
+import org.apache.hadoop.hdfs.server.protocol.JournalNodeEditLogManifest;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLogManifest;
 import org.apache.hadoop.ipc.ProtobufRpcEngine;
@@ -182,13 +183,14 @@ class JournalNodeRpcServer implements QJournalProtocol {
       long sinceTxId, boolean inProgressOk)
       throws IOException {
     
-    RemoteEditLogManifest manifest = jn.getOrCreateJournal(jid)
+    JournalNodeEditLogManifest manifest = jn.getOrCreateJournal(jid)
         .getEditLogManifest(sinceTxId, inProgressOk);
     
     return GetEditLogManifestResponseProto.newBuilder()
         .setManifest(PBHelper.convert(manifest))
         .setHttpPort(jn.getBoundHttpAddress().getPort())
         .setFromURL(jn.getHttpServerURI())
+        .setLastWriterEpoch(manifest.getLastWrittenEpoch())
         .build();
   }
 

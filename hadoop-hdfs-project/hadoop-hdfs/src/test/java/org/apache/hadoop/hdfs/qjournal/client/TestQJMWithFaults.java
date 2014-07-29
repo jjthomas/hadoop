@@ -35,6 +35,7 @@ import java.util.SortedSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 
+import com.google.common.collect.Lists;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.logging.impl.Log4JLogger;
@@ -45,7 +46,9 @@ import org.apache.hadoop.hdfs.qjournal.QJMTestUtil;
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocol;
 import org.apache.hadoop.hdfs.qjournal.server.JournalFaultInjector;
 import org.apache.hadoop.hdfs.server.namenode.EditLogFileOutputStream;
+import org.apache.hadoop.hdfs.server.namenode.EditLogInputStream;
 import org.apache.hadoop.hdfs.server.namenode.EditLogOutputStream;
+import org.apache.hadoop.hdfs.server.namenode.FSEditLogOp;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeLayoutVersion;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.util.Holder;
@@ -53,6 +56,7 @@ import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.ipc.ProtobufRpcEngine;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.log4j.Level;
+import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
@@ -274,6 +278,69 @@ public class TestQJMWithFaults {
     }
   }
 
+  @Test
+  public void testInProgress() throws IOException {
+    MiniJournalCluster cluster = new MiniJournalCluster.Builder(conf)
+        .build();
+    try {
+      LoggerCommand[] commands = new LoggerCommand[cluster.getNumNodes()];
+      for (int i = 0; i < commands.length; i++) {
+        commands[i] = new LoggerCommand();
+      }
+      QuorumJournalManager primaryQjm = createOptionallyFaultyQJM(cluster, commands);
+      primaryQjm.format(FAKE_NSINFO);
+      primaryQjm.recoverUnfinalizedSegments();
+      EditLogOutputStream stm = primaryQjm.startLogSegment(1,
+          NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
+      commands[0].doError = false;
+      for (int i = 1; i < commands.length; i++) {
+        commands[i].doError = true;
+      }
+      try {
+        QJMTestUtil.writeTxns(stm, 1, 5);
+        Assert.fail(
+            "Should not have been able to write transactions without quorum");
+      } catch (IOException e) {
+        checkException(e);
+      }
+      primaryQjm.close(); // primary fails
+
+      QuorumJournalManager secondaryQjm = createOptionallyFaultyQJM(cluster, commands);
+      commands[0].doError = true;
+      for (int i = 1; i < commands.length; i++) {
+        commands[i].doError = false;
+      }
+      secondaryQjm.recoverUnfinalizedSegments();
+      stm = secondaryQjm.startLogSegment(1,
+          NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
+      QJMTestUtil.writeTxns(stm, 1, 3); // write fewer transactions than
+      // the primary so we can make sure that we don't read any of the primary's
+      // transactions (all uncommitted)
+      commands[0].doError = false;
+      // with the below setup there is exactly one possible quorum of
+      // JNs, and it includes the JN with the primary's uncommitted txns
+      for (int i = 1; i < commands.length; i++) {
+        if (i < cluster.getQuorumSize()) {
+          commands[i].doError = false;
+        } else {
+          commands[i].doError = true;
+        }
+      }
+      List<EditLogInputStream> streams = Lists.newArrayList();
+      secondaryQjm.selectInputStreams(streams, 1, true);
+      for (EditLogInputStream elis : streams) {
+        FSEditLogOp op = null;
+        while ((op = elis.readOp()) != null) {
+          assertTrue("Uncomitted transaction returned from in-progress stream",
+              op.getTransactionId() <= 3);
+        }
+      }
+      secondaryQjm.close();
+    } finally {
+      cluster.shutdown();
+    }
+  }
+
   private void checkException(Throwable t) {
     GenericTestUtils.assertExceptionContains("Injected", t);
     if (t.toString().contains("AssertionError")) {
@@ -331,6 +398,39 @@ public class TestQJMWithFaults {
    */
   private void failIpcNumber(AsyncLogger logger, int idx) {
     ((InvocationCountingChannel)logger).failIpcNumber(idx);
+  }
+
+  private static class LoggerCommand {
+    public boolean doError;
+  }
+
+  private static class OptionallyFaultyChannel extends IPCLoggerChannel {
+    private LoggerCommand command;
+
+    public OptionallyFaultyChannel(Configuration conf, NamespaceInfo nsInfo,
+        String journalId, InetSocketAddress addr, LoggerCommand command) {
+      super(conf, nsInfo, journalId, addr);
+      this.command = command;
+    }
+
+    @Override
+    protected QJournalProtocol createProxy() throws IOException {
+      QJournalProtocol realProxy = super.createProxy();
+      return mockProxy(
+          new WrapEveryCall<Object>(realProxy) {
+            @Override void beforeCall(InvocationOnMock invocation)
+                throws Exception {
+              if (command.doError) {
+                throw new IOException("Injected - faking being down");
+              }
+            }
+          });
+    }
+
+    @Override
+    protected ExecutorService createExecutor() {
+      return MoreExecutors.sameThreadExecutor();
+    }
   }
   
   private static class RandomFaultyChannel extends IPCLoggerChannel {
@@ -480,6 +580,25 @@ public class TestQJMWithFaults {
 
     abstract void beforeCall(InvocationOnMock invocation) throws Exception;
     void afterCall(InvocationOnMock invocation, boolean succeeded) {}
+  }
+
+  private static QuorumJournalManager createOptionallyFaultyQJM(
+      MiniJournalCluster cluster, final LoggerCommand[] commands)
+      throws IOException {
+
+    AsyncLogger.Factory spyFactory = new AsyncLogger.Factory() {
+      private int count = 0;
+
+      @Override
+      public AsyncLogger createLogger(Configuration conf, NamespaceInfo nsInfo,
+          String journalId, InetSocketAddress addr) {
+        assertTrue("More loggers than journals created", count < commands.length);
+        return new OptionallyFaultyChannel(conf, nsInfo, journalId, addr,
+            commands[count++]);
+      }
+    };
+    return new QuorumJournalManager(conf, cluster.getQuorumJournalURI(JID),
+        FAKE_NSINFO, spyFactory);
   }
   
   private static QuorumJournalManager createInjectableQJM(MiniJournalCluster cluster)

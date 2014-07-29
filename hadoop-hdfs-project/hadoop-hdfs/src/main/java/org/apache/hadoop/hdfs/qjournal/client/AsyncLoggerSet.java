@@ -30,6 +30,7 @@ import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.NewEpochR
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.PrepareRecoveryResponseProto;
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.SegmentStateProto;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
+import org.apache.hadoop.hdfs.server.protocol.JournalNodeEditLogManifest;
 import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.server.protocol.RemoteEditLogManifest;
 
@@ -261,13 +262,13 @@ class AsyncLoggerSet {
     return QuorumCall.create(calls);
   }
 
-  public QuorumCall<AsyncLogger, RemoteEditLogManifest> getEditLogManifest(
+  public QuorumCall<AsyncLogger, JournalNodeEditLogManifest> getEditLogManifest(
       long fromTxnId, boolean inProgressOk) {
     Map<AsyncLogger,
-        ListenableFuture<RemoteEditLogManifest>> calls
+        ListenableFuture<JournalNodeEditLogManifest>> calls
         = Maps.newHashMap();
     for (AsyncLogger logger : loggers) {
-      ListenableFuture<RemoteEditLogManifest> future =
+      ListenableFuture<JournalNodeEditLogManifest> future =
           logger.getEditLogManifest(fromTxnId, inProgressOk);
       calls.put(logger, future);
     }
