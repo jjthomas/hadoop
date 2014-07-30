@@ -1301,9 +1301,8 @@ public class FSEditLog implements LogsPurgeable {
 
   /**
    * Return the txid of the last synced transaction.
-   * For test use only
    */
-  synchronized long getSyncTxId() {
+  public synchronized long getSyncTxId() {
     return synctxid;
   }
 
