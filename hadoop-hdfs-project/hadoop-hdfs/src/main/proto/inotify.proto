@@ -1,0 +1,108 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * These .proto interfaces are private and stable.
+ * Please see http://wiki.apache.org/hadoop/Compatibility
+ * for what changes are allowed for a *stable* .proto interface.
+ */
+
+// This file contains protocol buffers used to communicate edits to clients
+// as part of the inotify system.
+
+option java_package = "org.apache.hadoop.hdfs.protocol.proto";
+option java_outer_classname = "InotifyProtos";
+option java_generate_equals_and_hash = true;
+package hadoop.hdfs;
+
+import "acl.proto";
+
+enum EventType {
+CREATE,
+CLOSE,
+REOPEN,
+RENAME,
+METADATA,
+UNLINK
+}
+
+message Event {
+  required EventType type;
+  requires bytes contents;
+}
+
+message EventBase {
+required int64 eventId;
+}
+
+enum INodeType {
+FILE,
+DIRECTORY,
+SYMLINK
+}
+
+message CreateEvent {
+required EventBase base;
+required INodeType type;
+required string fullpath;
+required int64 inodeId;
+required int64 ctime;
+required int32 replication;
+required string ownerName;
+required string groupName;
+optional string symlinkTarget;
+repeated AclEntry acls;
+}
+
+message CloseEvent {
+required EventBase base;
+required string fullpath;
+required int64 inodeId;
+}
+
+message ReOpenEvent {
+required EventBase base;
+required string fullpath;
+required int64 inodeId;
+}
+
+message RenameEvent {
+required EventBase base;
+required string src;
+required int64 srcId;
+required string dest;
+required int64 destId;
+}
+
+message MetadataUpdateEvent {
+required EventBase base;
+required string fullpath;
+required int64 inodeId;
+optional int64 mtime;
+optional int64 atime;
+optional int32 replication;
+optional string ownerName;
+optional string groupName;
+optional string symlinkTarget;
+}
+
+message UnlinkEvent {
+required EventBase base;
+required string fullpath;
+required int64 inodeId;
+}
