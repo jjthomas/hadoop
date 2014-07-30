@@ -1353,5 +1353,5 @@ public interface ClientProtocol {
   public long getCurrentTxid() throws IOException;
 
   @Idempotent
-  public List<FSEditLogOp> getEditsFromTxid(long txid) throws IOException;
+  public byte[] getEditsFromTxid(long txid) throws IOException;
 }

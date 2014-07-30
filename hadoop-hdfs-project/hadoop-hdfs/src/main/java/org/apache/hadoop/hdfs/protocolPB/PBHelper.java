@@ -177,6 +177,7 @@ import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.namenode.CheckpointSignature;
+import org.apache.hadoop.hdfs.server.namenode.EditLogByteArrayOutputStream;
 import org.apache.hadoop.hdfs.server.namenode.FSEditLog;
 import org.apache.hadoop.hdfs.server.namenode.FSEditLogOp;
 import org.apache.hadoop.hdfs.server.namenode.INodeId;
@@ -2324,33 +2325,6 @@ public class PBHelper {
 
   public static ShmId convert(ShortCircuitShmIdProto shmId) {
     return new ShmId(shmId.getHi(), shmId.getLo());
-  }
-
-  public static List<FSEditLogOp> convert(GetEditsFromTxidResponseProto resp)
-    throws IOException, ClassNotFoundException { // TODO remove these exceptions
-    List<EditsProtos.EditProto> editsProtos = resp.getEditsList();
-    List<FSEditLogOp> edits = Lists.newArrayListWithCapacity(editsProtos.size());
-    for (EditsProtos.EditProto editProto : editsProtos) {
-      ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(
-          editProto.getEdit().toByteArray()));
-      switch(editProto.getType()) {
-      case RENAME: edits.add((FSEditLogOp.RenameOp) ois.readObject());
-      }
-    }
-    return edits;
-  }
-
-  public static GetEditsFromTxidResponseProto convertEditsResponse(
-      List<FSEditLogOp> edits) throws IOException { // TODO remove these exceptions
-    GetEditsFromTxidResponseProto.Builder builder =
-        GetEditsFromTxidResponseProto.newBuilder();
-    for (FSEditLogOp op : edits) {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      new ObjectOutputStream(baos).writeObject(op);
-      builder.addEdits(EditsProtos.EditProto.newBuilder().setEdit(
-          ByteString.copyFrom(baos.toByteArray())).build());
-    }
-    return builder.build();
   }
 }
 

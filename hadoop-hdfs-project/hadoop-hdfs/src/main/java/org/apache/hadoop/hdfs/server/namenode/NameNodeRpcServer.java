@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import org.apache.commons.logging.Log;
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -1453,21 +1454,31 @@ class NameNodeRpcServer implements NamenodeProtocols {
   }
 
   @Override // ClientProtocol
-  public List<FSEditLogOp> getEditsFromTxid(long txid) throws IOException {
-    namesystem.checkOperation(OperationCategory.READ); // TODO correct operation type?
+  public byte[] getEditsFromTxid(long txid) throws IOException {
+    namesystem.checkOperation(OperationCategory.READ); // TODO (james) correct operation type?
     namesystem.checkSuperuserPrivilege();
     FSEditLog log = namesystem.getFSImage().getEditLog();
+    long syncTxid = log.getSyncTxId();
     Collection<EditLogInputStream> streams = log.selectInputStreams(txid, 0,
         null, true);
-    List<FSEditLogOp> edits = Lists.newArrayList();
+    if (streams.isEmpty()) {
+      return new byte[0];
+    }
+    EditLogByteArrayOutputStream os = new EditLogByteArrayOutputStream(
+        Iterators.get(streams.iterator(), 0).getVersion(false));
     for (EditLogInputStream elis : streams) {
-      // TODO check txid continuity invariants
+      // TODO (james) check txid continuity invariants
       FSEditLogOp op = null;
-      while ((op = elis.readOp()) != null) {
-        edits.add(op);
+      // make sure we only read edits that have been synced to a quorum of
+      // JournalNodes -- otherwise we may return an uncommitted op
+      while ((op = elis.readOp()) != null && op.getTransactionId() <= syncTxid) {
+        os.write(op);
       }
     }
-    return edits;
+    // TODO (james) make this unnecessary
+    byte[] truncated = new byte[os.getDataLength()];
+    System.arraycopy(os.getData(), 0, truncated, 0, os.getDataLength());
+    return truncated;
   }
 }
 

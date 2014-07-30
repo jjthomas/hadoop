@@ -1362,16 +1362,13 @@ public class ClientNamenodeProtocolTranslatorPB implements
   }
 
   @Override
-  public List<FSEditLogOp> getEditsFromTxid(long txid) throws IOException {
+  public byte[] getEditsFromTxid(long txid) throws IOException {
     GetEditsFromTxidRequestProto req = GetEditsFromTxidRequestProto.newBuilder()
         .setTxid(txid).build();
     try {
-      return PBHelper.convert(rpcProxy.getEditsFromTxid(null, req));
+      return rpcProxy.getEditsFromTxid(null, req).getEdits().toByteArray();
     } catch (ServiceException e) {
       throw ProtobufHelper.getRemoteException(e);
-    } catch (ClassNotFoundException cnfe) {
-      // TODO remove this once we stop doing Java deserialization
-      throw new RuntimeException(cnfe);
     }
   }
 }

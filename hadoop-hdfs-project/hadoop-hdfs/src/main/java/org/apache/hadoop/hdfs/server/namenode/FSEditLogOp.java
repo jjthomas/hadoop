@@ -281,7 +281,7 @@ public abstract class FSEditLogOp {
   
   void readRpcIds(DataInputStream in, int logVersion)
       throws IOException {
-    if (NameNodeLayoutVersion.supports(
+    if (supports(
         LayoutVersion.Feature.EDITLOG_SUPPORT_RETRYCACHE, logVersion)) {
       this.rpcClientId = FSImageSerialization.readBytes(in);
       this.rpcCallId = FSImageSerialization.readInt(in);
@@ -295,6 +295,14 @@ public abstract class FSEditLogOp {
     this.rpcCallId = st.hasChildren("RPC_CALLID") ? 
         Integer.parseInt(st.getValue("RPC_CALLID"))
         : RpcConstants.INVALID_CALL_ID;
+  }
+
+  static boolean supports(LayoutVersion.LayoutFeature feature,
+      int layoutVersion) {
+    int currentVersion = NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION;
+    return layoutVersion < currentVersion ? NameNodeLayoutVersion.supports(
+        feature, currentVersion) : NameNodeLayoutVersion.supports(feature,
+        layoutVersion);
   }
   
   private static void appendRpcIdsToString(final StringBuilder builder,
@@ -329,7 +337,7 @@ public abstract class FSEditLogOp {
 
     private static List<AclEntry> read(DataInputStream in, int logVersion)
         throws IOException {
-      if (!NameNodeLayoutVersion.supports(Feature.EXTENDED_ACL, logVersion)) {
+      if (!supports(Feature.EXTENDED_ACL, logVersion)) {
         return null;
       }
 
@@ -384,7 +392,7 @@ public abstract class FSEditLogOp {
 
   private static List<XAttr> readXAttrsFromEditLog(DataInputStream in,
       int logVersion) throws IOException {
-    if (!NameNodeLayoutVersion.supports(NameNodeLayoutVersion.Feature.XATTRS,
+    if (!supports(NameNodeLayoutVersion.Feature.XATTRS,
         logVersion)) {
       return null;
     }
@@ -513,11 +521,11 @@ public abstract class FSEditLogOp {
     @Override
     void readFields(DataInputStream in, int logVersion)
         throws IOException {
-      if (!NameNodeLayoutVersion.supports(
+      if (!supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.length = in.readInt();
       }
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.ADD_INODE_ID, logVersion)) {
         this.inodeId = in.readLong();
       } else {
@@ -525,7 +533,7 @@ public abstract class FSEditLogOp {
         this.inodeId = INodeId.GRANDFATHER_INODE_ID;
       }
       if ((-17 < logVersion && length != 4) ||
-          (logVersion <= -17 && length != 5 && !NameNodeLayoutVersion.supports(
+          (logVersion <= -17 && length != 5 && !supports(
               LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion))) {
         throw new IOException("Incorrect data format."  +
                               " logVersion is " + logVersion +
@@ -534,7 +542,7 @@ public abstract class FSEditLogOp {
       }
       this.path = FSImageSerialization.readString(in);
 
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.replication = FSImageSerialization.readShort(in);
         this.mtime = FSImageSerialization.readLong(in);
@@ -543,9 +551,9 @@ public abstract class FSEditLogOp {
         this.mtime = readLong(in);
       }
 
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.FILE_ACCESS_TIME, logVersion)) {
-        if (NameNodeLayoutVersion.supports(
+        if (supports(
             LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
           this.atime = FSImageSerialization.readLong(in);
         } else {
@@ -555,7 +563,7 @@ public abstract class FSEditLogOp {
         this.atime = 0;
       }
 
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.blockSize = FSImageSerialization.readLong(in);
       } else {
@@ -695,7 +703,7 @@ public abstract class FSEditLogOp {
    * {@literal @AtMostOnce} for {@link ClientProtocol#create} and
    * {@link ClientProtocol#append}
    */
-  static class AddOp extends AddCloseOp {
+  public static class AddOp extends AddCloseOp {
     private AddOp() {
       super(OP_ADD);
     }
@@ -723,7 +731,7 @@ public abstract class FSEditLogOp {
    * not need to record the rpc ids here since a successful appendFile op will
    * finally log an AddOp.
    */
-  static class CloseOp extends AddCloseOp {
+  public static class CloseOp extends AddCloseOp {
     private CloseOp() {
       super(OP_CLOSE);
     }
@@ -746,7 +754,7 @@ public abstract class FSEditLogOp {
     }
   }
   
-  static class AddBlockOp extends FSEditLogOp {
+  public static class AddBlockOp extends FSEditLogOp {
     private String path;
     private Block penultimateBlock;
     private Block lastBlock;
@@ -852,7 +860,7 @@ public abstract class FSEditLogOp {
    * {@literal @AtMostOnce} for {@link ClientProtocol#updatePipeline}, but 
    * {@literal @Idempotent} for some other ops.
    */
-  static class UpdateBlocksOp extends FSEditLogOp implements BlockListUpdatingOp {
+  public static class UpdateBlocksOp extends FSEditLogOp implements BlockListUpdatingOp {
     String path;
     Block[] blocks;
     
@@ -939,7 +947,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#setReplication} */
-  static class SetReplicationOp extends FSEditLogOp {
+  public static class SetReplicationOp extends FSEditLogOp {
     String path;
     short replication;
 
@@ -972,7 +980,7 @@ public abstract class FSEditLogOp {
     void readFields(DataInputStream in, int logVersion)
         throws IOException {
       this.path = FSImageSerialization.readString(in);
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.replication = FSImageSerialization.readShort(in);
       } else {
@@ -1009,7 +1017,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @AtMostOnce} for {@link ClientProtocol#concat} */
-  static class ConcatDeleteOp extends FSEditLogOp {
+  public static class ConcatDeleteOp extends FSEditLogOp {
     int length;
     String trg;
     String[] srcs;
@@ -1064,7 +1072,7 @@ public abstract class FSEditLogOp {
     @Override
     void readFields(DataInputStream in, int logVersion)
         throws IOException {
-      if (!NameNodeLayoutVersion.supports(
+      if (!supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.length = in.readInt();
         if (length < 3) { // trg, srcs.., timestamp
@@ -1074,7 +1082,7 @@ public abstract class FSEditLogOp {
       }
       this.trg = FSImageSerialization.readString(in);
       int srcSize = 0;
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         srcSize = in.readInt();
       } else {
@@ -1094,7 +1102,7 @@ public abstract class FSEditLogOp {
         srcs[i]= FSImageSerialization.readString(in);
       }
       
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.timestamp = FSImageSerialization.readLong(in);
       } else {
@@ -1160,7 +1168,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @AtMostOnce} for {@link ClientProtocol#rename} */
-  static class RenameOldOp extends FSEditLogOp {
+  public static class RenameOldOp extends FSEditLogOp {
     int length;
     String src;
     String dst;
@@ -1201,7 +1209,7 @@ public abstract class FSEditLogOp {
     @Override
     void readFields(DataInputStream in, int logVersion)
         throws IOException {
-      if (!NameNodeLayoutVersion.supports(
+      if (!supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.length = in.readInt();
         if (this.length != 3) {
@@ -1211,7 +1219,7 @@ public abstract class FSEditLogOp {
       }
       this.src = FSImageSerialization.readString(in);
       this.dst = FSImageSerialization.readString(in);
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.timestamp = FSImageSerialization.readLong(in);
       } else {
@@ -1265,7 +1273,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @AtMostOnce} for {@link ClientProtocol#delete} */
-  static class DeleteOp extends FSEditLogOp {
+  public static class DeleteOp extends FSEditLogOp {
     int length;
     String path;
     long timestamp;
@@ -1299,7 +1307,7 @@ public abstract class FSEditLogOp {
     @Override
     void readFields(DataInputStream in, int logVersion)
         throws IOException {
-      if (!NameNodeLayoutVersion.supports(
+      if (!supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.length = in.readInt();
         if (this.length != 2) {
@@ -1307,7 +1315,7 @@ public abstract class FSEditLogOp {
         }
       }
       this.path = FSImageSerialization.readString(in);
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.timestamp = FSImageSerialization.readLong(in);
       } else {
@@ -1355,7 +1363,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#mkdirs} */
-  static class MkdirOp extends FSEditLogOp {
+  public static class MkdirOp extends FSEditLogOp {
     int length;
     long inodeId;
     String path;
@@ -1418,17 +1426,17 @@ public abstract class FSEditLogOp {
     
     @Override
     void readFields(DataInputStream in, int logVersion) throws IOException {
-      if (!NameNodeLayoutVersion.supports(
+      if (!supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.length = in.readInt();
       }
       if (-17 < logVersion && length != 2 ||
           logVersion <= -17 && length != 3
-          && !NameNodeLayoutVersion.supports(
+          && !supports(
               LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         throw new IOException("Incorrect data format. Mkdir operation.");
       }
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.ADD_INODE_ID, logVersion)) {
         this.inodeId = FSImageSerialization.readLong(in);
       } else {
@@ -1436,7 +1444,7 @@ public abstract class FSEditLogOp {
         this.inodeId = INodeId.GRANDFATHER_INODE_ID;
       }
       this.path = FSImageSerialization.readString(in);
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.timestamp = FSImageSerialization.readLong(in);
       } else {
@@ -1446,9 +1454,9 @@ public abstract class FSEditLogOp {
       // The disk format stores atimes for directories as well.
       // However, currently this is not being updated/used because of
       // performance reasons.
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.FILE_ACCESS_TIME, logVersion)) {
-        if (NameNodeLayoutVersion.supports(
+        if (supports(
             LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
           FSImageSerialization.readLong(in);
         } else {
@@ -1523,7 +1531,7 @@ public abstract class FSEditLogOp {
    * already bound with other editlog op which records rpc ids (
    * {@link ClientProtocol#startFile}). Thus no need to record rpc ids here.
    */
-  static class SetGenstampV1Op extends FSEditLogOp {
+  public static class SetGenstampV1Op extends FSEditLogOp {
     long genStampV1;
 
     private SetGenstampV1Op() {
@@ -1576,7 +1584,7 @@ public abstract class FSEditLogOp {
   }
 
   /** Similar with {@link SetGenstampV1Op} */
-  static class SetGenstampV2Op extends FSEditLogOp {
+  public static class SetGenstampV2Op extends FSEditLogOp {
     long genStampV2;
 
     private SetGenstampV2Op() {
@@ -1629,7 +1637,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#addBlock} */
-  static class AllocateBlockIdOp extends FSEditLogOp {
+  public static class AllocateBlockIdOp extends FSEditLogOp {
     long blockId;
 
     private AllocateBlockIdOp() {
@@ -1682,7 +1690,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#setPermission} */
-  static class SetPermissionsOp extends FSEditLogOp {
+  public static class SetPermissionsOp extends FSEditLogOp {
     String src;
     FsPermission permissions;
 
@@ -1748,7 +1756,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#setOwner} */
-  static class SetOwnerOp extends FSEditLogOp {
+  public static class SetOwnerOp extends FSEditLogOp {
     String src;
     String username;
     String groupname;
@@ -1829,7 +1837,7 @@ public abstract class FSEditLogOp {
     }
   }
   
-  static class SetNSQuotaOp extends FSEditLogOp {
+  public static class SetNSQuotaOp extends FSEditLogOp {
     String src;
     long nsQuota;
 
@@ -1882,7 +1890,7 @@ public abstract class FSEditLogOp {
     }
   }
 
-  static class ClearNSQuotaOp extends FSEditLogOp {
+  public static class ClearNSQuotaOp extends FSEditLogOp {
     String src;
 
     private ClearNSQuotaOp() {
@@ -1929,7 +1937,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#setQuota} */
-  static class SetQuotaOp extends FSEditLogOp {
+  public static class SetQuotaOp extends FSEditLogOp {
     String src;
     long nsQuota;
     long dsQuota;
@@ -2007,7 +2015,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#setTimes} */
-  static class TimesOp extends FSEditLogOp {
+  public static class TimesOp extends FSEditLogOp {
     int length;
     String path;
     long mtime;
@@ -2047,7 +2055,7 @@ public abstract class FSEditLogOp {
     @Override
     void readFields(DataInputStream in, int logVersion)
         throws IOException {
-      if (!NameNodeLayoutVersion.supports(
+      if (!supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.length = in.readInt();
         if (length != 3) {
@@ -2056,7 +2064,7 @@ public abstract class FSEditLogOp {
       }
       this.path = FSImageSerialization.readString(in);
 
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.mtime = FSImageSerialization.readLong(in);
         this.atime = FSImageSerialization.readLong(in);
@@ -2105,7 +2113,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @AtMostOnce} for {@link ClientProtocol#createSymlink} */
-  static class SymlinkOp extends FSEditLogOp {
+  public static class SymlinkOp extends FSEditLogOp {
     int length;
     long inodeId;
     String path;
@@ -2166,7 +2174,7 @@ public abstract class FSEditLogOp {
     @Override
     void readFields(DataInputStream in, int logVersion)
         throws IOException {
-      if (!NameNodeLayoutVersion.supports(
+      if (!supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.length = in.readInt();
         if (this.length != 4) {
@@ -2174,7 +2182,7 @@ public abstract class FSEditLogOp {
               + "symlink operation.");
         }
       }
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.ADD_INODE_ID, logVersion)) {
         this.inodeId = FSImageSerialization.readLong(in);
       } else {
@@ -2184,7 +2192,7 @@ public abstract class FSEditLogOp {
       this.path = FSImageSerialization.readString(in);
       this.value = FSImageSerialization.readString(in);
 
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.mtime = FSImageSerialization.readLong(in);
         this.atime = FSImageSerialization.readLong(in);
@@ -2303,7 +2311,7 @@ public abstract class FSEditLogOp {
     @Override
     void readFields(DataInputStream in, int logVersion)
         throws IOException {
-      if (!NameNodeLayoutVersion.supports(
+      if (!supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.length = in.readInt();
         if (this.length != 3) {
@@ -2313,7 +2321,7 @@ public abstract class FSEditLogOp {
       this.src = FSImageSerialization.readString(in);
       this.dst = FSImageSerialization.readString(in);
 
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.timestamp = FSImageSerialization.readLong(in);
       } else {
@@ -2414,7 +2422,7 @@ public abstract class FSEditLogOp {
    * meanwhile, startFile and appendFile both have their own corresponding
    * editlog op.
    */
-  static class ReassignLeaseOp extends FSEditLogOp {
+  public static class ReassignLeaseOp extends FSEditLogOp {
     String leaseHolder;
     String path;
     String newHolder;
@@ -2490,7 +2498,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#getDelegationToken} */
-  static class GetDelegationTokenOp extends FSEditLogOp {
+  public static class GetDelegationTokenOp extends FSEditLogOp {
     DelegationTokenIdentifier token;
     long expiryTime;
 
@@ -2525,7 +2533,7 @@ public abstract class FSEditLogOp {
         throws IOException {
       this.token = new DelegationTokenIdentifier();
       this.token.readFields(in);
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.expiryTime = FSImageSerialization.readLong(in);
       } else {
@@ -2563,7 +2571,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#renewDelegationToken} */
-  static class RenewDelegationTokenOp extends FSEditLogOp {
+  public static class RenewDelegationTokenOp extends FSEditLogOp {
     DelegationTokenIdentifier token;
     long expiryTime;
 
@@ -2598,7 +2606,7 @@ public abstract class FSEditLogOp {
         throws IOException {
       this.token = new DelegationTokenIdentifier();
       this.token.readFields(in);
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITLOG_OP_OPTIMIZATION, logVersion)) {
         this.expiryTime = FSImageSerialization.readLong(in);
       } else {
@@ -2636,7 +2644,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @Idempotent} for {@link ClientProtocol#cancelDelegationToken} */
-  static class CancelDelegationTokenOp extends FSEditLogOp {
+  public static class CancelDelegationTokenOp extends FSEditLogOp {
     DelegationTokenIdentifier token;
 
     private CancelDelegationTokenOp() {
@@ -2690,7 +2698,7 @@ public abstract class FSEditLogOp {
     }
   }
 
-  static class UpdateMasterKeyOp extends FSEditLogOp {
+  public static class UpdateMasterKeyOp extends FSEditLogOp {
     DelegationKey key;
 
     private UpdateMasterKeyOp() {
@@ -2743,7 +2751,7 @@ public abstract class FSEditLogOp {
     }
   }
   
-  static class LogSegmentOp extends FSEditLogOp {
+  public static class LogSegmentOp extends FSEditLogOp {
     private LogSegmentOp(FSEditLogOpCodes code) {
       super(code);
       assert code == OP_START_LOG_SEGMENT ||
@@ -2832,7 +2840,7 @@ public abstract class FSEditLogOp {
    * Operation corresponding to creating a snapshot.
    * {@literal @AtMostOnce} for {@link ClientProtocol#createSnapshot}.
    */
-  static class CreateSnapshotOp extends FSEditLogOp {
+  public static class CreateSnapshotOp extends FSEditLogOp {
     String snapshotRoot;
     String snapshotName;
     
@@ -2902,7 +2910,7 @@ public abstract class FSEditLogOp {
    * Operation corresponding to delete a snapshot.
    * {@literal @AtMostOnce} for {@link ClientProtocol#deleteSnapshot}.
    */
-  static class DeleteSnapshotOp extends FSEditLogOp {
+  public static class DeleteSnapshotOp extends FSEditLogOp {
     String snapshotRoot;
     String snapshotName;
     
@@ -2972,7 +2980,7 @@ public abstract class FSEditLogOp {
    * Operation corresponding to rename a snapshot.
    * {@literal @AtMostOnce} for {@link ClientProtocol#renameSnapshot}.
    */
-  static class RenameSnapshotOp extends FSEditLogOp {
+  public static class RenameSnapshotOp extends FSEditLogOp {
     String snapshotRoot;
     String snapshotOldName;
     String snapshotNewName;
@@ -3054,7 +3062,7 @@ public abstract class FSEditLogOp {
   /**
    * Operation corresponding to allow creating snapshot on a directory
    */
-  static class AllowSnapshotOp extends FSEditLogOp { // @Idempotent
+  public static class AllowSnapshotOp extends FSEditLogOp { // @Idempotent
     String snapshotRoot;
 
     public AllowSnapshotOp() {
@@ -3108,7 +3116,7 @@ public abstract class FSEditLogOp {
   /**
    * Operation corresponding to disallow creating snapshot on a directory
    */
-  static class DisallowSnapshotOp extends FSEditLogOp { // @Idempotent
+  public static class DisallowSnapshotOp extends FSEditLogOp { // @Idempotent
     String snapshotRoot;
 
     public DisallowSnapshotOp() {
@@ -3163,7 +3171,7 @@ public abstract class FSEditLogOp {
    * {@literal @AtMostOnce} for
    * {@link ClientProtocol#addCacheDirective}
    */
-  static class AddCacheDirectiveInfoOp extends FSEditLogOp {
+  public static class AddCacheDirectiveInfoOp extends FSEditLogOp {
     CacheDirectiveInfo directive;
 
     public AddCacheDirectiveInfoOp() {
@@ -3229,7 +3237,7 @@ public abstract class FSEditLogOp {
    * {@literal @AtMostOnce} for
    * {@link ClientProtocol#modifyCacheDirective}
    */
-  static class ModifyCacheDirectiveInfoOp extends FSEditLogOp {
+  public static class ModifyCacheDirectiveInfoOp extends FSEditLogOp {
     CacheDirectiveInfo directive;
 
     public ModifyCacheDirectiveInfoOp() {
@@ -3301,7 +3309,7 @@ public abstract class FSEditLogOp {
    * {@literal @AtMostOnce} for
    * {@link ClientProtocol#removeCacheDirective}
    */
-  static class RemoveCacheDirectiveInfoOp extends FSEditLogOp {
+  public static class RemoveCacheDirectiveInfoOp extends FSEditLogOp {
     long id;
 
     public RemoveCacheDirectiveInfoOp() {
@@ -3354,7 +3362,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @AtMostOnce} for {@link ClientProtocol#addCachePool} */
-  static class AddCachePoolOp extends FSEditLogOp {
+  public static class AddCachePoolOp extends FSEditLogOp {
     CachePoolInfo info;
 
     public AddCachePoolOp() {
@@ -3415,7 +3423,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @AtMostOnce} for {@link ClientProtocol#modifyCachePool} */
-  static class ModifyCachePoolOp extends FSEditLogOp {
+  public static class ModifyCachePoolOp extends FSEditLogOp {
     CachePoolInfo info;
 
     public ModifyCachePoolOp() {
@@ -3483,7 +3491,7 @@ public abstract class FSEditLogOp {
   }
 
   /** {@literal @AtMostOnce} for {@link ClientProtocol#removeCachePool} */
-  static class RemoveCachePoolOp extends FSEditLogOp {
+  public static class RemoveCachePoolOp extends FSEditLogOp {
     String poolName;
 
     public RemoveCachePoolOp() {
@@ -3534,7 +3542,7 @@ public abstract class FSEditLogOp {
     }
   }
   
-  static class RemoveXAttrOp extends FSEditLogOp {
+  public static class RemoveXAttrOp extends FSEditLogOp {
     List<XAttr> xAttrs;
     String src;
     
@@ -3581,7 +3589,7 @@ public abstract class FSEditLogOp {
     }
   }
   
-  static class SetXAttrOp extends FSEditLogOp {
+  public static class SetXAttrOp extends FSEditLogOp {
     List<XAttr> xAttrs;
     String src;
     
@@ -3628,7 +3636,7 @@ public abstract class FSEditLogOp {
     }
   }
 
-  static class SetAclOp extends FSEditLogOp {
+  public static class SetAclOp extends FSEditLogOp {
     List<AclEntry> aclEntries = Lists.newArrayList();
     String src;
 
@@ -3723,7 +3731,7 @@ public abstract class FSEditLogOp {
   /**
    * Operation corresponding to upgrade
    */
-  static class RollingUpgradeOp extends FSEditLogOp { // @Idempotent
+  public static class RollingUpgradeOp extends FSEditLogOp { // @Idempotent
     private final String name;
     private long time;
 
@@ -3830,15 +3838,33 @@ public abstract class FSEditLogOp {
     private final OpInstanceCache cache;
     private int maxOpSize;
     private final boolean supportEditLogLength;
+    private final boolean supportFutureEditLogVersion;
+    private FSEditLogLoader.PositionTrackingInputStream ptis;
+
+    public Reader(DataInputStream in, StreamLimiter limiter, int logVersion) {
+      this(in, limiter, logVersion, false);
+    }
 
     /**
      * Construct the reader
      * @param in The stream to read from.
      * @param logVersion The version of the data coming from the stream.
+     * @param supportFutureEditLogVersion when dealing with a future edit log
+     *                                    version, skip edits with unknown
+     *                                    opcodes and unknown trailing fields
+     *                                    of known edit types
      */
-    public Reader(DataInputStream in, StreamLimiter limiter, int logVersion) {
+    public Reader(DataInputStream in, StreamLimiter limiter, int logVersion,
+        boolean supportFutureEditLogVersion) {
+      this.supportFutureEditLogVersion = logVersion <
+          NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION &&
+          supportFutureEditLogVersion;
+      if (supportFutureEditLogVersion) {
+        ptis = new FSEditLogLoader.PositionTrackingInputStream(in);
+        in = new DataInputStream(ptis);
+      }
       this.logVersion = logVersion;
-      if (NameNodeLayoutVersion.supports(
+      if (supports(
           LayoutVersion.Feature.EDITS_CHESKUM, logVersion)) {
         this.checksum = DataChecksum.newCrc32();
       } else {
@@ -3847,9 +3873,8 @@ public abstract class FSEditLogOp {
       // It is possible that the logVersion is actually a future layoutversion
       // during the rolling upgrade (e.g., the NN gets upgraded first). We
       // assume future layout will also support length of editlog op.
-      this.supportEditLogLength = NameNodeLayoutVersion.supports(
-          NameNodeLayoutVersion.Feature.EDITLOG_LENGTH, logVersion)
-          || logVersion < NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION;
+      this.supportEditLogLength = supports(
+          NameNodeLayoutVersion.Feature.EDITLOG_LENGTH, logVersion);
 
       if (this.checksum != null) {
         this.in = new DataInputStream(
@@ -3861,6 +3886,8 @@ public abstract class FSEditLogOp {
       this.cache = new OpInstanceCache();
       this.maxOpSize = DFSConfigKeys.DFS_NAMENODE_MAX_OP_SIZE_DEFAULT;
     }
+
+
 
     public void setMaxOpSize(int maxOpSize) {
       this.maxOpSize = maxOpSize;
@@ -3981,14 +4008,33 @@ public abstract class FSEditLogOp {
 
       FSEditLogOp op = cache.get(opCode);
       if (op == null) {
-        throw new IOException("Read invalid opcode " + opCode);
+        if (supportFutureEditLogVersion) {
+          // edit log length is definitely supported if we are here
+          int opLength = in.readInt();
+          if (opLength < 4) { // corrupt, fall back to default behavior
+            throw new IOException("Read invalid opcode " + opCode);
+          }
+          in.read(new byte[opLength - 4]); // read so that checksum is updated
+          // we don't want to skip the op if it appears to be corrupt, since
+          // it could be an op we know about
+          validateChecksum(in, checksum, HdfsConstants.INVALID_TXID);
+          return decodeOp();
+        } else {
+          throw new IOException("Read invalid opcode " + opCode);
+        }
       }
 
+      int opLength = 0;
       if (supportEditLogLength) {
-        in.readInt();
+        opLength = in.readInt();
       }
 
-      if (NameNodeLayoutVersion.supports(
+      long curPos = 0;
+      if (supportFutureEditLogVersion) {
+        curPos = ptis.getPos();
+      }
+
+      if (supports(
           LayoutVersion.Feature.STORED_TXIDS, logVersion)) {
         // Read the txid
         op.setTransactionId(in.readLong());
@@ -3997,6 +4043,16 @@ public abstract class FSEditLogOp {
       }
 
       op.readFields(in, logVersion);
+
+      if (supportFutureEditLogVersion) {
+        // we are assuming here that new fields are only added to the end
+        // of edit log ops, and no fields are removed
+        long bytesRead = ptis.getPos() - curPos;
+        if (bytesRead < opLength - 4) { // checksum, still unread, is 4 bytes
+          // we need to read here (not skip) so that checksum is updated
+          in.read(new byte[opLength - 4 - (int) bytesRead]);
+        }
+      }
 
       validateChecksum(in, checksum, op.txid);
       return op;

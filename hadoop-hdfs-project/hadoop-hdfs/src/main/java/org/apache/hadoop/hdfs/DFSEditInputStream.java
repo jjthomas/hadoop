@@ -1,20 +1,22 @@
 package org.apache.hadoop.hdfs;
 
-import com.google.common.collect.Iterators;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hdfs.protocol.ClientProtocol;
+import org.apache.hadoop.hdfs.server.namenode.EditLogByteArrayInputStream;
 import org.apache.hadoop.hdfs.server.namenode.FSEditLogOp;
 
 import java.io.IOException;
-import java.util.Iterator;
 
 public class DFSEditInputStream {
   private final ClientProtocol namenode;
-  private Iterator<FSEditLogOp> it;
+  private EditLogByteArrayInputStream in;
   private long lastReadTxid;
+  private static final Log LOG = LogFactory.getLog(DFSEditInputStream.class);
+
 
   DFSEditInputStream(ClientProtocol namenode) throws IOException {
     this.namenode = namenode;
-    this.it = Iterators.emptyIterator();
     this.lastReadTxid = namenode.getCurrentTxid(); // only consider new txn's
   }
 
@@ -22,17 +24,32 @@ public class DFSEditInputStream {
    * Non-blocking call. Returns null if no new edits are currently available.
    * @return
    */
-  public FSEditLogOp next() throws IOException {
+  public FSEditLogOp next() {
     // TODO NN failover case?
-    if (!it.hasNext()) {
-      it = namenode.getEditsFromTxid(lastReadTxid + 1).iterator();
-    }
-    if (it.hasNext()) {
-      FSEditLogOp op = it.next();
-      lastReadTxid = op.getTransactionId(); // TODO consider case where there is no txid?
-      return op;
-    } else {
+    FSEditLogOp next = null;
+    boolean zeroLengthEdits = false;
+    try {
+      if (in == null) {
+        byte[] edits = namenode.getEditsFromTxid(lastReadTxid + 1);
+        zeroLengthEdits = edits.length == 0;
+        in = new EditLogByteArrayInputStream(edits);
+      }
+      next = in.nextOp();
+    } catch (IOException e) {
+      if (!zeroLengthEdits) {
+        LOG.info("Unable to read edits returned from NameNode ... will retry " +
+            "on next call to next()", e);
+      }
+      in = null;
       return null;
     }
+
+    if (next == null) {
+      in = null;
+      return null;
+    }
+
+    lastReadTxid = next.getTransactionId(); // TODO consider case where there is no txid?
+    return next;
   }
 }

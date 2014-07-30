@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs.protocolPB;
 import java.io.IOException;
 import java.util.List;
 
+import com.google.protobuf.ByteString;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BatchedRemoteIterator.BatchedEntries;
@@ -1359,8 +1360,8 @@ public class ClientNamenodeProtocolServerSideTranslatorPB implements
   public GetEditsFromTxidResponseProto getEditsFromTxid(RpcController controller,
       GetEditsFromTxidRequestProto req) throws ServiceException {
     try {
-      return PBHelper.convertEditsResponse(server.getEditsFromTxid(
-          req.getTxid()));
+      return GetEditsFromTxidResponseProto.newBuilder().setEdits(
+          ByteString.copyFrom(server.getEditsFromTxid(req.getTxid()))).build();
     } catch (IOException e) {
       throw new ServiceException(e);
     }

@@ -32,7 +32,6 @@ import "Security.proto";
 import "hdfs.proto";
 import "acl.proto";
 import "xattr.proto";
-import "edits.proto";
 
 /**
  * The ClientNamenodeProtocol Service defines the interface between a client 
@@ -667,7 +666,7 @@ message GetEditsFromTxidRequestProto {
 }
 
 message GetEditsFromTxidResponseProto {
-  repeated EditProto edits = 1;
+  required bytes edits = 1;
 }
 
 service ClientNamenodeProtocol {
