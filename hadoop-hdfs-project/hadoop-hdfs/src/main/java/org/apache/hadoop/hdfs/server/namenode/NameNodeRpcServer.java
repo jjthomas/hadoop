@@ -1457,13 +1457,14 @@ class NameNodeRpcServer implements NamenodeProtocols {
     namesystem.checkOperation(OperationCategory.READ); // TODO correct operation type?
     namesystem.checkSuperuserPrivilege();
     FSEditLog log = namesystem.getFSImage().getEditLog();
+    long syncTxid = log.getSyncTxId();
     Collection<EditLogInputStream> streams = log.selectInputStreams(txid, 0,
         null, true);
     List<FSEditLogOp> edits = Lists.newArrayList();
     for (EditLogInputStream elis : streams) {
       // TODO check txid continuity invariants
       FSEditLogOp op = null;
-      while ((op = elis.readOp()) != null) {
+      while ((op = elis.readOp()) != null && op.getTransactionId() <= syncTxid) {
         edits.add(op);
       }
     }
