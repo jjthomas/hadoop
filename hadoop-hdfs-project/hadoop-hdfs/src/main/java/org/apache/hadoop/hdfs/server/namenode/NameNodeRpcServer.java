@@ -65,6 +65,8 @@ import org.apache.hadoop.ha.protocolPB.HAServiceProtocolServerSideTranslatorPB;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.HDFSPolicyProvider;
+import org.apache.hadoop.hdfs.inotify.Event;
+import org.apache.hadoop.hdfs.inotify.EventsList;
 import org.apache.hadoop.hdfs.protocol.AclException;
 import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.hdfs.protocol.BlockListAsLongs;
@@ -1453,22 +1455,32 @@ class NameNodeRpcServer implements NamenodeProtocols {
   }
 
   @Override // ClientProtocol
-  public List<FSEditLogOp> getEditsFromTxid(long txid) throws IOException {
+  public EventsList getEditsFromTxid(long txid) throws IOException {
     namesystem.checkOperation(OperationCategory.READ); // TODO correct operation type?
     namesystem.checkSuperuserPrivilege();
     FSEditLog log = namesystem.getFSImage().getEditLog();
     long syncTxid = log.getSyncTxId();
+    // if we haven't synced anything yet, only need to read finalized segments
+    boolean readInProgress = syncTxid > 0;
     Collection<EditLogInputStream> streams = log.selectInputStreams(txid, 0,
-        null, true);
-    List<FSEditLogOp> edits = Lists.newArrayList();
+        null, readInProgress);
+    List<Event> events = Lists.newArrayList();
+    long maxSeenTxid = -1;
     for (EditLogInputStream elis : streams) {
-      // TODO check txid continuity invariants
       FSEditLogOp op = null;
-      while ((op = elis.readOp()) != null && op.getTransactionId() <= syncTxid) {
-        edits.add(op);
+      while ((op = elis.readOp()) != null && (!readInProgress ||
+          op.getTransactionId() <= syncTxid)) {
+        Event[] eventsFromOp = InotifyFSEditLogOpTranslator.translate(op);
+        if (eventsFromOp != null) {
+          events.addAll(Arrays.asList(eventsFromOp));
+        }
+        if (op.getTransactionId() > maxSeenTxid) {
+          maxSeenTxid = op.getTransactionId();
+        }
       }
     }
-    return edits;
+    assert !readInProgress || maxSeenTxid == syncTxid;
+    return new EventsList(events, maxSeenTxid);
   }
 }
 

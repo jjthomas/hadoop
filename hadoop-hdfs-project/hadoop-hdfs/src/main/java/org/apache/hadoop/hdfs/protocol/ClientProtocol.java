@@ -41,6 +41,8 @@ import org.apache.hadoop.fs.permission.AclEntry;
 import org.apache.hadoop.fs.permission.AclStatus;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.inotify.Event;
+import org.apache.hadoop.hdfs.inotify.EventsList;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants.RollingUpgradeAction;
 import org.apache.hadoop.hdfs.security.token.block.DataEncryptionKey;
 import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenIdentifier;
@@ -1353,5 +1355,5 @@ public interface ClientProtocol {
   public long getCurrentTxid() throws IOException;
 
   @Idempotent
-  public List<FSEditLogOp> getEditsFromTxid(long txid) throws IOException;
+  public EventsList getEditsFromTxid(long txid) throws IOException;
 }

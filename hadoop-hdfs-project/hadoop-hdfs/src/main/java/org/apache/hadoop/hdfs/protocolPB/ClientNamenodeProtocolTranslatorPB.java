@@ -40,6 +40,7 @@ import org.apache.hadoop.fs.XAttrSetFlag;
 import org.apache.hadoop.fs.permission.AclEntry;
 import org.apache.hadoop.fs.permission.AclStatus;
 import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.hdfs.inotify.EventsList;
 import org.apache.hadoop.hdfs.protocol.AlreadyBeingCreatedException;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveEntry;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveInfo;
@@ -1362,16 +1363,13 @@ public class ClientNamenodeProtocolTranslatorPB implements
   }
 
   @Override
-  public List<FSEditLogOp> getEditsFromTxid(long txid) throws IOException {
+  public EventsList getEditsFromTxid(long txid) throws IOException {
     GetEditsFromTxidRequestProto req = GetEditsFromTxidRequestProto.newBuilder()
         .setTxid(txid).build();
     try {
       return PBHelper.convert(rpcProxy.getEditsFromTxid(null, req));
     } catch (ServiceException e) {
       throw ProtobufHelper.getRemoteException(e);
-    } catch (ClassNotFoundException cnfe) {
-      // TODO remove this once we stop doing Java deserialization
-      throw new RuntimeException(cnfe);
     }
   }
 }

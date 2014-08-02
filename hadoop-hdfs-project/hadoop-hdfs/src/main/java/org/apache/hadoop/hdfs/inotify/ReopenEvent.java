@@ -1,6 +1,6 @@
 package org.apache.hadoop.hdfs.inotify;
 
-public class ReopenEvent {
+public class ReopenEvent extends Event {
   private String path;
 
   public ReopenEvent(String path) {

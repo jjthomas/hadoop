@@ -2,42 +2,36 @@ package org.apache.hadoop.hdfs.inotify;
 
 import org.apache.hadoop.fs.XAttr;
 import org.apache.hadoop.fs.permission.AclEntry;
+import org.apache.hadoop.fs.permission.FsPermission;
 
 import java.util.List;
 
-public class MetadataUpdateEvent {
+public class MetadataUpdateEvent extends Event {
   private String path;
-  private long inodeId;
   private long mtime;
   private long atime;
   private int replication;
   private String ownerName;
   private String groupName;
-  private String symlinkTarget;
+  private FsPermission perms;
   private List<AclEntry> acls;
   private List<XAttr> xAttrs;
   private boolean xAttrsRemoved;
 
   public static class Builder {
     private String path;
-    private long inodeId;
     private long mtime;
     private long atime;
     private int replication;
     private String ownerName;
     private String groupName;
-    private String symlinkTarget;
+    private FsPermission perms;
     private List<AclEntry> acls;
     private List<XAttr> xAttrs;
     private boolean xAttrsRemoved;
 
     public Builder path(String path) {
       this.path = path;
-      return this;
-    }
-
-    public Builder inodeId(long inodeId) {
-      this.inodeId = inodeId;
       return this;
     }
 
@@ -66,8 +60,8 @@ public class MetadataUpdateEvent {
       return this;
     }
 
-    public Builder symlinkTarget(String symlinkTarget) {
-      this.symlinkTarget = symlinkTarget;
+    public Builder perms(FsPermission perms) {
+      this.perms = perms;
       return this;
     }
 
@@ -93,13 +87,12 @@ public class MetadataUpdateEvent {
 
   private MetadataUpdateEvent(Builder b) {
     this.path = b.path;
-    this.inodeId = b.inodeId;
     this.mtime = b.mtime;
     this.atime = b.atime;
     this.replication = b.replication;
     this.ownerName = b.ownerName;
     this.groupName = b.groupName;
-    this.symlinkTarget = b.symlinkTarget;
+    this.perms = b.perms;
     this.acls = b.acls;
     this.xAttrs = b.xAttrs;
     this.xAttrsRemoved = b.xAttrsRemoved;
@@ -107,10 +100,6 @@ public class MetadataUpdateEvent {
 
   public String getPath() {
     return path;
-  }
-
-  public long getInodeId() {
-    return inodeId;
   }
 
   public long getMtime() {
@@ -133,8 +122,8 @@ public class MetadataUpdateEvent {
     return groupName;
   }
 
-  public String getSymlinkTarget() {
-    return symlinkTarget;
+  public FsPermission getPerms() {
+    return perms;
   }
 
   public List<AclEntry> getAcls() {

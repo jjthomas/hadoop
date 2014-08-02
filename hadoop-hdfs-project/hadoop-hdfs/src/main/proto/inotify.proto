@@ -32,19 +32,20 @@ package hadoop.hdfs;
 
 import "acl.proto";
 import "xattr.proto";
+import "hdfs.proto";
 
 enum EventType {
-  CREATE = 0x0;
-  CLOSE = 0x1;
-  REOPEN = 0x2;
-  RENAME = 0x3;
-  METADATA = 0x4;
-  UNLINK = 0x5;
+  EVENT_CREATE = 0x0;
+  EVENT_CLOSE = 0x1;
+  EVENT_REOPEN = 0x2;
+  EVENT_RENAME = 0x3;
+  EVENT_METADATA = 0x4;
+  EVENT_UNLINK = 0x5;
 }
 
 message EventProto {
   required EventType type = 1;
-  requires bytes contents = 2;
+  required bytes contents = 2;
 }
 
 message EventBase {
@@ -52,27 +53,28 @@ message EventBase {
 }
 
 enum INodeType {
-  FILE = 0x0;
-  DIRECTORY = 0x1;
-  SYMLINK = 0x2;
+  TYPE_FILE = 0x0;
+  TYPE_DIRECTORY = 0x1;
+  TYPE_SYMLINK = 0x2;
 }
 
 message CreateEventProto {
   required INodeType type = 1;
   required string path = 2;
   required int64 ctime = 3;
-  required int32 replication = 4;
-  required string ownerName = 5;
-  required string groupName = 6;
-  optional string symlinkTarget = 7;
-  repeated AclEntryProto acls = 8;
+  required string ownerName = 4;
+  required string groupName = 5;
+  required FsPermissionProto perms = 6;
+  optional int32 replication = 7;
+  optional string symlinkTarget = 8;
 }
 
 message CloseEventProto {
   required string path = 1;
+  required int64 fileSize = 2;
 }
 
-message ReOpenEventProto {
+message ReopenEventProto {
   required string path = 1;
 }
 
@@ -88,7 +90,7 @@ message MetadataUpdateEventProto {
   optional int32 replication = 4;
   optional string ownerName = 5;
   optional string groupName = 6;
-  optional string symlinkTarget = 7;
+  optional FsPermissionProto perms = 7;
   repeated AclEntryProto acls = 8;
   repeated XAttrProto xAttrs = 9;
   optional bool xAttrsRemoved = 10;

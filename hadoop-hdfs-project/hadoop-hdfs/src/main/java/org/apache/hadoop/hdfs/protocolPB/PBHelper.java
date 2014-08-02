@@ -19,13 +19,9 @@ package org.apache.hadoop.hdfs.protocolPB;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -48,6 +44,14 @@ import org.apache.hadoop.ha.HAServiceProtocol.HAServiceState;
 import org.apache.hadoop.ha.proto.HAServiceProtocolProtos;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.StorageType;
+import org.apache.hadoop.hdfs.inotify.CloseEvent;
+import org.apache.hadoop.hdfs.inotify.CreateEvent;
+import org.apache.hadoop.hdfs.inotify.Event;
+import org.apache.hadoop.hdfs.inotify.EventsList;
+import org.apache.hadoop.hdfs.inotify.MetadataUpdateEvent;
+import org.apache.hadoop.hdfs.inotify.RenameEvent;
+import org.apache.hadoop.hdfs.inotify.ReopenEvent;
+import org.apache.hadoop.hdfs.inotify.UnlinkEvent;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveEntry;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveInfo;
@@ -114,7 +118,6 @@ import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.NNHAStatusHe
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.ReceivedDeletedBlockInfoProto;
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.RegisterCommandProto;
 import org.apache.hadoop.hdfs.protocol.proto.DatanodeProtocolProtos.StorageReportProto;
-import org.apache.hadoop.hdfs.protocol.proto.EditsProtos;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.BlockKeyProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.BlockProto;
@@ -160,6 +163,7 @@ import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.StorageReportProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.StorageTypeProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.StorageTypesProto;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos.StorageUuidsProto;
+import org.apache.hadoop.hdfs.protocol.proto.InotifyProtos;
 import org.apache.hadoop.hdfs.protocol.proto.JournalProtocolProtos.JournalInfoProto;
 import org.apache.hadoop.hdfs.protocol.proto.XAttrProtos.GetXAttrsResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.XAttrProtos.ListXAttrsResponseProto;
@@ -177,8 +181,6 @@ import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
 import org.apache.hadoop.hdfs.server.common.StorageInfo;
 import org.apache.hadoop.hdfs.server.namenode.CheckpointSignature;
-import org.apache.hadoop.hdfs.server.namenode.FSEditLog;
-import org.apache.hadoop.hdfs.server.namenode.FSEditLogOp;
 import org.apache.hadoop.hdfs.server.namenode.INodeId;
 import org.apache.hadoop.hdfs.server.protocol.BalancerBandwidthCommand;
 import org.apache.hadoop.hdfs.server.protocol.BlockCommand;
@@ -2326,30 +2328,188 @@ public class PBHelper {
     return new ShmId(shmId.getHi(), shmId.getLo());
   }
 
-  public static List<FSEditLogOp> convert(GetEditsFromTxidResponseProto resp)
-    throws IOException, ClassNotFoundException { // TODO remove these exceptions
-    List<EditsProtos.EditProto> editsProtos = resp.getEditsList();
-    List<FSEditLogOp> edits = Lists.newArrayListWithCapacity(editsProtos.size());
-    for (EditsProtos.EditProto editProto : editsProtos) {
-      ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(
-          editProto.getEdit().toByteArray()));
-      switch(editProto.getType()) {
-      case RENAME: edits.add((FSEditLogOp.RenameOp) ois.readObject());
-      }
+  private static CreateEvent.INodeType createTypeConvert(InotifyProtos.INodeType
+      type) {
+    switch (type) {
+    case TYPE_DIRECTORY:
+      return CreateEvent.INodeType.DIRECTORY;
+    case TYPE_FILE:
+      return CreateEvent.INodeType.FILE;
+    case TYPE_SYMLINK:
+      return CreateEvent.INodeType.SYMLINK;
+    default:
+      return null;
     }
-    return edits;
   }
 
-  public static GetEditsFromTxidResponseProto convertEditsResponse(
-      List<FSEditLogOp> edits) throws IOException { // TODO remove these exceptions
+  private static InotifyProtos.INodeType createTypeConvert(CreateEvent.INodeType
+      type) {
+    switch (type) {
+    case DIRECTORY:
+      return InotifyProtos.INodeType.TYPE_DIRECTORY;
+    case FILE:
+      return InotifyProtos.INodeType.TYPE_FILE;
+    case SYMLINK:
+      return InotifyProtos.INodeType.TYPE_SYMLINK;
+    default:
+      return null;
+    }
+  }
+
+  public static EventsList convert(GetEditsFromTxidResponseProto resp) throws
+    IOException {
+    List<Event> events = Lists.newArrayList();
+    for (InotifyProtos.EventProto p : resp.getEventsList()) {
+      switch(p.getType()) {
+      case EVENT_CLOSE:
+        InotifyProtos.CloseEventProto close =
+            InotifyProtos.CloseEventProto.parseFrom(p.getContents());
+        events.add(new CloseEvent(close.getPath(), close.getFileSize()));
+        break;
+      case EVENT_CREATE:
+        InotifyProtos.CreateEventProto create =
+            InotifyProtos.CreateEventProto.parseFrom(p.getContents());
+        events.add(new CreateEvent.Builder()
+            .type(createTypeConvert(create.getType()))
+            .path(create.getPath())
+            .ctime(create.getCtime())
+            .ownerName(create.getOwnerName())
+            .groupName(create.getGroupName())
+            .perms(convert(create.getPerms()))
+            .replication(create.getReplication())
+            .symlinkTarget(create.getSymlinkTarget().isEmpty() ? null :
+            create.getSymlinkTarget()).build());
+        break;
+      case EVENT_METADATA:
+        InotifyProtos.MetadataUpdateEventProto meta =
+            InotifyProtos.MetadataUpdateEventProto.parseFrom(p.getContents());
+        events.add(new MetadataUpdateEvent.Builder()
+            .path(meta.getPath())
+            .mtime(meta.getMtime())
+            .atime(meta.getAtime())
+            .replication(meta.getReplication())
+            .ownerName(
+                meta.getOwnerName().isEmpty() ? null : meta.getOwnerName())
+            .groupName(
+                meta.getGroupName().isEmpty() ? null : meta.getGroupName())
+            .perms(meta.hasPerms() ? convert(meta.getPerms()) : null)
+            .acls(meta.getAclsList().isEmpty() ? null : convertAclEntry(
+                meta.getAclsList()))
+            .xAttrs(meta.getXAttrsList().isEmpty() ? null : convertXAttrs(
+                meta.getXAttrsList()))
+            .xAttrsRemoved(meta.getXAttrsRemoved())
+            .build());
+        break;
+      case EVENT_RENAME:
+        InotifyProtos.RenameEventProto rename =
+            InotifyProtos.RenameEventProto.parseFrom(p.getContents());
+        events.add(new RenameEvent(rename.getSrcPath(), rename.getDestPath()));
+        break;
+      case EVENT_REOPEN:
+        InotifyProtos.ReopenEventProto reopen =
+            InotifyProtos.ReopenEventProto.parseFrom(p.getContents());
+        events.add(new ReopenEvent(reopen.getPath()));
+        break;
+      case EVENT_UNLINK:
+        InotifyProtos.UnlinkEventProto unlink =
+            InotifyProtos.UnlinkEventProto.parseFrom(p.getContents());
+        events.add(new UnlinkEvent(unlink.getPath()));
+        break;
+      default:
+        throw new RuntimeException("Unexpected inotify event type: " +
+            p.getType());
+      }
+    }
+    return new EventsList(events, resp.getLastTxid());
+  }
+
+  public static GetEditsFromTxidResponseProto convertEditsResponse(EventsList el) {
     GetEditsFromTxidResponseProto.Builder builder =
         GetEditsFromTxidResponseProto.newBuilder();
-    for (FSEditLogOp op : edits) {
-      ByteArrayOutputStream baos = new ByteArrayOutputStream();
-      new ObjectOutputStream(baos).writeObject(op);
-      builder.addEdits(EditsProtos.EditProto.newBuilder().setEdit(
-          ByteString.copyFrom(baos.toByteArray())).build());
+    for (Event e : el.getEvents()) {
+      if (e instanceof CloseEvent) {
+        CloseEvent ce = (CloseEvent) e;
+        builder.addEvents(InotifyProtos.EventProto.newBuilder()
+            .setType(InotifyProtos.EventType.EVENT_CLOSE)
+            .setContents(
+                InotifyProtos.CloseEventProto.newBuilder()
+                .setPath(ce.getPath())
+                .setFileSize(ce.getFileSize()).build().toByteString()
+            ).build());
+      } else if (e instanceof CreateEvent) {
+        CreateEvent ce = (CreateEvent) e;
+        builder.addEvents(InotifyProtos.EventProto.newBuilder()
+            .setType(InotifyProtos.EventType.EVENT_CREATE)
+            .setContents(
+                InotifyProtos.CreateEventProto.newBuilder()
+                    .setType(createTypeConvert(ce.getType()))
+                    .setPath(ce.getPath())
+                    .setCtime(ce.getCtime())
+                    .setOwnerName(ce.getOwnerName())
+                    .setGroupName(ce.getGroupName())
+                    .setPerms(convert(ce.getPerms()))
+                    .setReplication(ce.getReplication())
+                    .setSymlinkTarget(ce.getSymlinkTarget() == null ?
+                        "" : ce.getSymlinkTarget()).build().toByteString()
+            ).build());
+      } else if (e instanceof MetadataUpdateEvent) {
+        MetadataUpdateEvent me = (MetadataUpdateEvent) e;
+        InotifyProtos.MetadataUpdateEventProto.Builder metaB =
+            InotifyProtos.MetadataUpdateEventProto.newBuilder()
+            .setPath(me.getPath())
+            .setMtime(me.getMtime())
+            .setAtime(me.getAtime())
+            .setReplication(me.getReplication())
+            .setOwnerName(me.getOwnerName() == null ? "" :
+                me.getOwnerName())
+            .setGroupName(me.getGroupName() == null ? "" :
+                me.getGroupName())
+            .setPerms(me.getPerms() == null ? FsPermissionProto
+                .getDefaultInstance() : convert(me.getPerms()))
+            .addAllAcls(me.getAcls() == null ?
+                Lists.<AclEntryProto>newArrayList() :
+                convertAclEntryProto(me.getAcls()))
+            .addAllXAttrs(me.getxAttrs() == null ?
+                Lists.<XAttrProto>newArrayList() :
+                convertXAttrProto(me.getxAttrs()))
+            .setXAttrsRemoved(me.isxAttrsRemoved());
+        if (me.getPerms() != null) {
+          metaB.setPerms(convert(me.getPerms()));
+        }
+        builder.addEvents(InotifyProtos.EventProto.newBuilder()
+            .setType(InotifyProtos.EventType.EVENT_METADATA)
+            .setContents(metaB.build().toByteString())
+            .build());
+      } else if (e instanceof RenameEvent) {
+        RenameEvent re = (RenameEvent) e;
+        builder.addEvents(InotifyProtos.EventProto.newBuilder()
+            .setType(InotifyProtos.EventType.EVENT_RENAME)
+            .setContents(
+                InotifyProtos.RenameEventProto.newBuilder()
+                    .setSrcPath(re.getSrcPath())
+                    .setDestPath(re.getDstPath()).build().toByteString()
+            ).build());
+      } else if (e instanceof ReopenEvent) {
+        ReopenEvent re = (ReopenEvent) e;
+        builder.addEvents(InotifyProtos.EventProto.newBuilder()
+            .setType(InotifyProtos.EventType.EVENT_REOPEN)
+            .setContents(
+                InotifyProtos.ReopenEventProto.newBuilder()
+                    .setPath(re.getPath()).build().toByteString()
+            ).build());
+      } else if (e instanceof UnlinkEvent) {
+        UnlinkEvent ue = (UnlinkEvent) e;
+        builder.addEvents(InotifyProtos.EventProto.newBuilder()
+            .setType(InotifyProtos.EventType.EVENT_UNLINK)
+            .setContents(
+                InotifyProtos.UnlinkEventProto.newBuilder()
+                    .setPath(ue.getPath()).build().toByteString()
+            ).build());
+      } else {
+        throw new RuntimeException("Unexpected inotify event: " + e);
+      }
     }
+    builder.setLastTxid(el.getLastTxid());
     return builder.build();
   }
 }

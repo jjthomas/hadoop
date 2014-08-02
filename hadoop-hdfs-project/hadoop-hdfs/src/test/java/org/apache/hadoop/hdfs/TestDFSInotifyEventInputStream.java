@@ -4,22 +4,16 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.inotify.Event;
 import org.apache.hadoop.hdfs.server.namenode.FSEditLogOp;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.junit.Test;
 
 import java.io.IOException;
 
-public class TestDFSEditInputStream {
+public class TestDFSInotifyEventInputStream {
 
-  private static final Configuration conf = new Configuration();
-
-  static {
-    // Don't retry connections - it just slows down the tests.
-    conf.setInt(CommonConfigurationKeysPublic.IPC_CLIENT_CONNECT_MAX_RETRIES_KEY, 0);
-  }
-
-  // make this an end-to-end test, throw the JNs in there too
+  // TODO make this an end-to-end test, throw the JNs in there too
   @Test
   public void testBasic() throws IOException {
     Configuration conf = new HdfsConfiguration();
@@ -28,18 +22,11 @@ public class TestDFSEditInputStream {
     DFSClient client = new DFSClient(NameNode.getAddress(conf), conf);
     FileSystem fs = cluster.getFileSystem();
     DFSTestUtil.createFile(fs, new Path("/file"), 1024, (short) 1, 0L);
-    DFSEditInputStream eis = client.getEditStream();
+    DFSInotifyEventInputStream eis = client.getEditStream();
     client.rename("/file", "/file2", null);
-    FSEditLogOp next = null;
+    Event next = null;
     while ((next = eis.next()) == null);
-    // force a null or two
-    eis.next();
-    eis.next();
     System.out.println(next);
   }
 
-  @Test
-  public void testValidEditsOnly() {
-    // mock the ClientProtocol and pass it to DFSEditInputStream
-  }
 }

@@ -1,10 +1,11 @@
 package org.apache.hadoop.hdfs.inotify;
 
 import org.apache.hadoop.fs.permission.AclEntry;
+import org.apache.hadoop.fs.permission.FsPermission;
 
 import java.util.List;
 
-public class CreateEvent {
+public class CreateEvent extends Event {
 
   public static enum INodeType {
     FILE, DIRECTORY, SYMLINK;
@@ -12,24 +13,22 @@ public class CreateEvent {
 
   private INodeType type;
   private String path;
-  private long inodeId;
   private long ctime;
   private int replication;
   private String ownerName;
   private String groupName;
+  private FsPermission perms;
   private String symlinkTarget;
-  private List<AclEntry> acls;
 
   public static class Builder {
     private INodeType type;
     private String path;
-    private long inodeId;
     private long ctime;
     private int replication;
     private String ownerName;
     private String groupName;
+    private FsPermission perms;
     private String symlinkTarget;
-    private List<AclEntry> acls;
 
     public Builder type(INodeType type) {
       this.type = type;
@@ -38,11 +37,6 @@ public class CreateEvent {
 
     public Builder path(String path) {
       this.path = path;
-      return this;
-    }
-
-    public Builder inodeId(long inodeId) {
-      this.inodeId = inodeId;
       return this;
     }
 
@@ -66,13 +60,13 @@ public class CreateEvent {
       return this;
     }
 
-    public Builder symlinkTarget(String symlinkTarget) {
-      this.symlinkTarget = symlinkTarget;
+    public Builder perms(FsPermission perms) {
+      this.perms = perms;
       return this;
     }
 
-    public Builder acls(List<AclEntry> acls) {
-      this.acls = acls;
+    public Builder symlinkTarget(String symlinkTarget) {
+      this.symlinkTarget = symlinkTarget;
       return this;
     }
 
@@ -84,13 +78,12 @@ public class CreateEvent {
   private CreateEvent(Builder b) {
     this.type = b.type;
     this.path = b.path;
-    this.inodeId = b.inodeId;
     this.ctime = b.ctime;
     this.replication = b.replication;
     this.ownerName = b.ownerName;
     this.groupName = b.groupName;
+    this.perms = b.perms;
     this.symlinkTarget = b.symlinkTarget;
-    this.acls = b.acls;
   }
 
   public INodeType getType() {
@@ -99,10 +92,6 @@ public class CreateEvent {
 
   public String getPath() {
     return path;
-  }
-
-  public long getInodeId() {
-    return inodeId;
   }
 
   public long getCtime() {
@@ -121,11 +110,11 @@ public class CreateEvent {
     return groupName;
   }
 
-  public String getSymlinkTarget() {
-    return symlinkTarget;
+  public FsPermission getPerms() {
+    return perms;
   }
 
-  public List<AclEntry> getAcls() {
-    return acls;
+  public String getSymlinkTarget() {
+    return symlinkTarget;
   }
 }

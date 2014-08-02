@@ -1,6 +1,6 @@
 package org.apache.hadoop.hdfs.inotify;
 
-public class RenameEvent {
+public class RenameEvent extends Event {
   private String srcPath;
   private String dstPath;
 
