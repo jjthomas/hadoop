@@ -2008,7 +2008,7 @@ public class MiniDFSCluster {
    */
   public boolean isClusterUp() {
     for (int index = 0; index < nameNodes.length; index++) {
-      if (!isNameNodeUp(index)) {
+      if (nameNodes[index].nameNode != null && !isNameNodeUp(index)) {
         return false;
       }
     }
