@@ -255,7 +255,7 @@ public class BlockPoolSliceStorage extends Storage {
    */
   private void doTransition(DataNode datanode, StorageDirectory sd,
       NamespaceInfo nsInfo, StartupOption startOpt) throws IOException {
-    if (startOpt == StartupOption.ROLLBACK) {
+    if (startOpt == StartupOption.ROLLBACK && sd.getPreviousDir().exists()) {
       doRollback(sd, nsInfo); // rollback if applicable
     } else {
       // Restore all the files in the trash. The restored files are retained
