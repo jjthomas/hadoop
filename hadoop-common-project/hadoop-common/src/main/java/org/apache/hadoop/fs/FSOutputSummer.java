@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.zip.Checksum;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.util.DataChecksum;
@@ -45,7 +46,12 @@ abstract public class FSOutputSummer extends OutputStream {
   private int maxChunkSize;
   private int checksumSize;
 
-  private static final int BUFFER_NUM_CHUNKS = 10;
+  private static int BUFFER_NUM_CHUNKS = 10;
+
+  @VisibleForTesting
+  public static void setNumChunksToBuffer(int numChunks) {
+    BUFFER_NUM_CHUNKS = numChunks;
+  }
   
   protected FSOutputSummer(DataChecksum sum, int maxChunkSize, int checksumSize) {
     this.sum = sum;
@@ -57,7 +63,7 @@ abstract public class FSOutputSummer extends OutputStream {
   }
   
   /* write the data chunk in <code>b</code> staring at <code>offset</code> with
-   * a length of <code>len</code>, and its checksum
+   * a length of <code>len > 0</code>, and its checksum
    */
   protected abstract void writeChunk(byte[] b, int bOffset, int bLen,
       byte[] checksum, int checksumOffset, int checksumLen) throws IOException;
@@ -208,5 +214,9 @@ abstract public class FSOutputSummer extends OutputStream {
 
   protected synchronized void resetChecksumBufSize() {
     setChecksumBufSize(maxChunkSize * BUFFER_NUM_CHUNKS);
+  }
+
+  protected int getBytesPerChecksum() {
+    return maxChunkSize;
   }
 }

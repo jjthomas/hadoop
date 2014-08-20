@@ -1847,20 +1847,14 @@ public class DFSOutputStream extends FSOutputSummer
       long lastBlockLength = -1L;
       boolean updateLength = syncFlags.contains(SyncFlag.UPDATE_LENGTH);
       synchronized (this) {
-        /* Record current blockOffset. This might be changed inside
-         * flushBuffer() where a partial checksum chunk might be flushed.
-         * After the flush, reset the bytesCurBlock back to its previous value,
-         * any partial checksum chunk will be sent now and in next packet.
-         */
         long saveOffset = bytesCurBlock;
-        Packet oldCurrentPacket = currentPacket;
         // flush checksum buffer, but keep checksum buffer intact
         flushBuffer(true);
         // bytesCurBlock potentially incremented if there was buffered data
 
         if (DFSClient.LOG.isDebugEnabled()) {
           DFSClient.LOG.debug(
-            "DFSClient flush() : saveOffset " + saveOffset +  
+            "DFSClient flush() :" +
             " bytesCurBlock " + bytesCurBlock +
             " lastFlushOffset " + lastFlushOffset);
         }
@@ -1880,9 +1874,8 @@ public class DFSOutputStream extends FSOutputSummer
           // We already flushed up to this offset.
           // This means that we haven't written anything since the last flush
           // (or the beginning of the file). Hence, we should not have any
-          // packet queued prior to this call, since the last flush set
-          // currentPacket = null.
-          assert oldCurrentPacket == null :
+          // packet queued, since the last flush set currentPacket = null.
+          assert currentPacket == null :
             "Empty flush should not occur with a currentPacket";
 
           if (isSync && bytesCurBlock > 0) {
@@ -1892,9 +1885,6 @@ public class DFSOutputStream extends FSOutputSummer
             // So send an empty sync packet.
             currentPacket = new Packet(packetSize, chunksPerPacket,
                 bytesCurBlock, currentSeqno++, this.checksum.getChecksumSize());
-          } else {
-            // just discard the current packet since it is already been sent.
-            currentPacket = null;
           }
         }
         if (currentPacket != null) {
@@ -1904,7 +1894,8 @@ public class DFSOutputStream extends FSOutputSummer
         // Restore state of stream. Record the last flush offset 
         // of the last full chunk that was flushed.
         //
-        bytesCurBlock = saveOffset;
+        bytesCurBlock = Math.max(saveOffset,
+            bytesCurBlock - bytesCurBlock % getBytesPerChecksum());
         toWaitFor = lastQueuedSeqno;
       } // end synchronized
 

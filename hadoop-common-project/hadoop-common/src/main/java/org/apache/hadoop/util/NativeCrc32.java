@@ -42,7 +42,7 @@ class NativeCrc32 {
    * modified.
    * 
    * @param bytesPerSum the chunk size (eg 512 bytes)
-   * @param checksumType the DataChecksum type constant
+   * @param checksumType the DataChecksum type constant (NULL is not supported)
    * @param sums the DirectByteBuffer pointing at the beginning of the
    *             stored checksums
    * @param data the DirectByteBuffer pointing at the beginning of the
@@ -87,17 +87,17 @@ class NativeCrc32 {
         "", 0, false);
   }
   
-    private static native void nativeComputeChunkedSums(
-      int bytesPerSum, int checksumType,
-      ByteBuffer sums, int sumsOffset,
-      ByteBuffer data, int dataOffset, int dataLength,
-      String fileName, long basePos, boolean verify);
+  private static native void nativeComputeChunkedSums(
+    int bytesPerSum, int checksumType,
+    ByteBuffer sums, int sumsOffset,
+    ByteBuffer data, int dataOffset, int dataLength,
+    String fileName, long basePos, boolean verify);
 
-    private static native void nativeComputeChunkedSumsByteArray(
-      int bytesPerSum, int checksumType,
-      byte[] sums, int sumsOffset,
-      byte[] data, int dataOffset, int dataLength,
-      String fileName, long basePos, boolean verify);
+  private static native void nativeComputeChunkedSumsByteArray(
+    int bytesPerSum, int checksumType,
+    byte[] sums, int sumsOffset,
+    byte[] data, int dataOffset, int dataLength,
+    String fileName, long basePos, boolean verify);
 
   // Copy the constants over from DataChecksum so that javah will pick them up
   // and make them available in the native code header.
