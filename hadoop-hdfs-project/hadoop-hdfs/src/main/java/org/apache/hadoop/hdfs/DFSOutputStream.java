@@ -512,7 +512,7 @@ public class DFSOutputStream extends FSOutputSummer
             }
           }
           assert one != null;
-
+          System.out.println("PACKET: " + one);
           // get new block from namenode.
           if (stage == BlockConstructionStage.PIPELINE_SETUP_CREATE) {
             if(DFSClient.LOG.isDebugEnabled()) {
@@ -857,6 +857,7 @@ public class DFSOutputStream extends FSOutputSummer
             }
               
             // update bytesAcked
+            System.out.println("NUM-BYTES: " + one.getLastByteOffsetBlock());
             block.setNumBytes(one.getLastByteOffsetBlock());
 
             synchronized (dataQueue) {
@@ -1244,6 +1245,7 @@ public class DFSOutputStream extends FSOutputSummer
      * Returns the list of target datanodes.
      */
     private LocatedBlock nextBlockOutputStream() throws IOException {
+      System.out.println("NEXT-BLOCK");
       LocatedBlock lb = null;
       DatanodeInfo[] nodes = null;
       StorageType[] storageTypes = null;
@@ -1714,6 +1716,8 @@ public class DFSOutputStream extends FSOutputSummer
   @Override
   protected synchronized void writeChunk(byte[] b, int offset, int len,
       byte[] checksum, int ckoff, int cklen) throws IOException {
+    System.out.println(len);
+    System.out.println(Arrays.toString(Arrays.copyOfRange(b, offset, offset + len)));
     dfsClient.checkOpen();
     checkClosed();
 
@@ -2069,6 +2073,7 @@ public class DFSOutputStream extends FSOutputSummer
    */
   @Override
   public synchronized void close() throws IOException {
+    System.out.println("START-CLOSE");
     if (closed) {
       IOException e = lastException.getAndSet(null);
       if (e == null)

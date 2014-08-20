@@ -160,6 +160,7 @@ abstract public class FSOutputSummer extends OutputStream {
       count = 0;
       writeChecksumChunk(buf, 0, bufLen);
       if (keep) {
+        System.out.println("KEEP CASE");
         count = bufLen % maxChunkSize;
         System.arraycopy(buf, bufLen - count, buf, 0, count);
       }
@@ -170,6 +171,7 @@ abstract public class FSOutputSummer extends OutputStream {
    * Return the number of valid bytes currently in the buffer.
    */
   protected synchronized int getBufferedDataSize() {
+    System.out.println("BUFFERED-SIZE");
     return count;
   }
   
@@ -207,12 +209,14 @@ abstract public class FSOutputSummer extends OutputStream {
    * Resets existing buffer with a new one of the specified size.
    */
   protected synchronized void setChecksumBufSize(int size) {
+    System.out.println("SET-CHECKSUM");
     this.buf = new byte[size];
     this.checksum = new byte[((size - 1) / maxChunkSize + 1) * checksumSize];
     this.count = 0;
   }
 
   protected synchronized void resetChecksumBufSize() {
+    System.out.println("RESET-CHECKSUM");
     setChecksumBufSize(maxChunkSize * BUFFER_NUM_CHUNKS);
   }
 

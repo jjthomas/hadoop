@@ -916,6 +916,7 @@ public class TestDFSClientRetries {
         out4.close();
       } else {
         out4.hflush();
+        // out4.close();
       }
 
       //shutdown namenode

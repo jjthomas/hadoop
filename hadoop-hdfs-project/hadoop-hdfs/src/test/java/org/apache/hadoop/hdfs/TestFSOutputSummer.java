@@ -87,6 +87,44 @@ public class TestFSOutputSummer {
     checkFile(name);
     cleanupFile(name);
   }
+
+  @Test
+  public void writeFile4() throws Exception {
+    Configuration conf = new HdfsConfiguration();
+    conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, 4096);
+    MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes((short) 2)
+        .build();
+    fileSys = cluster.getFileSystem();
+    Path name = new Path("try.dat");
+    FSDataOutputStream stm = fileSys.create(name, true,
+        fileSys.getConf().getInt(IO_FILE_BUFFER_SIZE_KEY, 4096),
+        (short) 2, 4096);
+    byte[] buffer = new byte[4094];
+    new Random(0L).nextBytes(buffer);
+    stm.write(buffer, 0, buffer.length);
+    stm.hflush();
+    stm.close();
+
+    stm = fileSys.append(name);
+    buffer = new byte[512];
+    new Random(0L).nextBytes(buffer);
+    stm.write(buffer, 0, buffer.length);
+    stm.close();
+
+
+    /*
+    FSDataInputStream stm2 = fileSys.open(name);
+    // do a sanity check. Read the file
+    byte[] actual = new byte[1000];
+    stm2.readFully(0, actual);
+    checkAndEraseData(actual, 0, buffer, "Read Sanity Test");
+    stm2.close();
+    // do a sanity check. Get the file checksum
+    fileSys.getFileChecksum(name);
+    cleanupFile(name);
+    */
+  }
   private void checkAndEraseData(byte[] actual, int from, byte[] expected,
       String message) throws Exception {
     for (int idx = 0; idx < actual.length; idx++) {
