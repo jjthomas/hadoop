@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.zip.Checksum;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.util.DataChecksum;
@@ -45,7 +46,12 @@ abstract public class FSOutputSummer extends OutputStream {
   private int maxChunkSize;
   private int checksumSize;
 
-  private static final int BUFFER_NUM_CHUNKS = 10;
+  private static int BUFFER_NUM_CHUNKS = 10;
+
+  @VisibleForTesting
+  public static void setNumChunksToBuffer(int numChunks) {
+    BUFFER_NUM_CHUNKS = numChunks;
+  }
   
   protected FSOutputSummer(DataChecksum sum, int maxChunkSize, int checksumSize) {
     this.sum = sum;
@@ -57,7 +63,7 @@ abstract public class FSOutputSummer extends OutputStream {
   }
   
   /* write the data chunk in <code>b</code> staring at <code>offset</code> with
-   * a length of <code>len</code>, and its checksum
+   * a length of <code>len > 0</code>, and its checksum
    */
   protected abstract void writeChunk(byte[] b, int bOffset, int bLen,
       byte[] checksum, int checksumOffset, int checksumLen) throws IOException;
@@ -147,8 +153,11 @@ abstract public class FSOutputSummer extends OutputStream {
   /* Forces any buffered output bytes to be checksumed and written out to
    * the underlying output stream.  If keep is true, then the state of 
    * this object remains intact.
+   *
+   * Returns the number of bytes kept in the buffer (can be non-zero only if
+   * keep is true).
    */
-  protected synchronized void flushBuffer(boolean keep) throws IOException {
+  protected synchronized int flushBuffer(boolean keep) throws IOException {
     if (count != 0) {
       int bufLen = count;
       count = 0;
@@ -158,6 +167,8 @@ abstract public class FSOutputSummer extends OutputStream {
         System.arraycopy(buf, bufLen - count, buf, 0, count);
       }
     }
+
+    return count;
   }
 
   /**

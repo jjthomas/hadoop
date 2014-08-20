@@ -26,6 +26,7 @@ import java.util.List;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FSOutputSummer;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DFSClientAdapter;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
@@ -57,6 +58,10 @@ public class TestBlockUnderConstruction {
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(3).build();
     cluster.waitActive();
     hdfs = cluster.getFileSystem();
+    // need to make sure the block size is a multiple of the FSOutputSummer
+    // buffer size so that when we write a full block it is completely flushed
+    // to the DataNodes (without an explicit flush or close)
+    FSOutputSummer.setNumChunksToBuffer(1);
   }
 
   @AfterClass
