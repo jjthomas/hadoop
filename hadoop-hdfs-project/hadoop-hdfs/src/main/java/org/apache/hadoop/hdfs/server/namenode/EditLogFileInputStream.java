@@ -506,4 +506,8 @@ public class EditLogFileInputStream extends EditLogInputStream {
       reader.setMaxOpSize(maxOpSize);
     }
   }
+
+  @Override public boolean isLocalLog() {
+    return log instanceof FileLog;
+  }
 }

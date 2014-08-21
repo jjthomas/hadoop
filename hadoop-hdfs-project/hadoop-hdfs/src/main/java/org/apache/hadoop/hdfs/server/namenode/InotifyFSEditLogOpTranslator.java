@@ -40,102 +40,106 @@ public class InotifyFSEditLogOpTranslator {
   }
 
   public static Event[] translate(FSEditLogOp op) {
-    if (op.opCode == FSEditLogOpCodes.OP_ADD) {
+    switch(op.opCode) {
+    case OP_ADD:
       FSEditLogOp.AddOp addOp = (FSEditLogOp.AddOp) op;
       if (addOp.blocks.length == 0) { // create
-        return new Event[]{new Event.CreateEvent.Builder().path(addOp.path)
+        return new Event[] { new Event.CreateEvent.Builder().path(addOp.path)
             .ctime(addOp.atime)
             .replication(addOp.replication)
             .ownerName(addOp.permissions.getUserName())
             .groupName(addOp.permissions.getGroupName())
             .perms(addOp.permissions.getPermission())
-            .iNodeType(Event.CreateEvent.INodeType.FILE).build()};
+            .iNodeType(Event.CreateEvent.INodeType.FILE).build() };
       } else {
-        return new Event[]{new Event.ReopenEvent(addOp.path)};
+        return new Event[] { new Event.AppendEvent(addOp.path) };
       }
-    } else if (op.opCode == FSEditLogOpCodes.OP_CLOSE) {
+    case OP_CLOSE:
       FSEditLogOp.CloseOp cOp = (FSEditLogOp.CloseOp) op;
-      return new Event[]{new Event.CloseEvent(cOp.path, getSize(cOp), cOp.mtime)};
-    } else if (op.opCode == FSEditLogOpCodes.OP_SET_REPLICATION) {
+      return new Event[] {
+          new Event.CloseEvent(cOp.path, getSize(cOp), cOp.mtime) };
+    case OP_SET_REPLICATION:
       FSEditLogOp.SetReplicationOp setRepOp = (FSEditLogOp.SetReplicationOp) op;
-      return new Event[]{new Event.MetadataUpdateEvent.Builder()
+      return new Event[] { new Event.MetadataUpdateEvent.Builder()
           .metadataType(Event.MetadataUpdateEvent.MetadataType.REPLICATION)
           .path(setRepOp.path)
-          .replication(setRepOp.replication).build()};
-    } else if (op.opCode == FSEditLogOpCodes.OP_CONCAT_DELETE) {
+          .replication(setRepOp.replication).build() };
+    case OP_CONCAT_DELETE:
       FSEditLogOp.ConcatDeleteOp cdOp = (FSEditLogOp.ConcatDeleteOp) op;
       List<Event> events = Lists.newArrayList();
-      events.add(new Event.ReopenEvent(cdOp.trg));
+      events.add(new Event.AppendEvent(cdOp.trg));
       for (String src : cdOp.srcs) {
         events.add(new Event.UnlinkEvent(src, cdOp.timestamp));
       }
       events.add(new Event.CloseEvent(cdOp.trg, -1, cdOp.timestamp));
       return events.toArray(new Event[0]);
-    } else if (op.opCode == FSEditLogOpCodes.OP_RENAME_OLD) {
-      FSEditLogOp.RenameOldOp rnOp = (FSEditLogOp.RenameOldOp) op;
-      return new Event[]{new Event.RenameEvent(rnOp.src, rnOp.dst, rnOp.timestamp)};
-    } else if (op.opCode == FSEditLogOpCodes.OP_RENAME) {
+    case OP_RENAME_OLD:
+      FSEditLogOp.RenameOldOp rnOpOld = (FSEditLogOp.RenameOldOp) op;
+      return new Event[] {
+          new Event.RenameEvent(rnOpOld.src, rnOpOld.dst, rnOpOld.timestamp) };
+    case OP_RENAME:
       FSEditLogOp.RenameOp rnOp = (FSEditLogOp.RenameOp) op;
-      return new Event[]{new Event.RenameEvent(rnOp.src, rnOp.dst, rnOp.timestamp)};
-    } else if (op.opCode == FSEditLogOpCodes.OP_DELETE) {
+      return new Event[] {
+          new Event.RenameEvent(rnOp.src, rnOp.dst, rnOp.timestamp) };
+    case OP_DELETE:
       FSEditLogOp.DeleteOp delOp = (FSEditLogOp.DeleteOp) op;
-      return new Event[]{new Event.UnlinkEvent(delOp.path, delOp.timestamp)};
-    } else if (op.opCode == FSEditLogOpCodes.OP_MKDIR) {
+      return new Event[] { new Event.UnlinkEvent(delOp.path, delOp.timestamp) };
+    case OP_MKDIR:
       FSEditLogOp.MkdirOp mkOp = (FSEditLogOp.MkdirOp) op;
-      return new Event[]{new Event.CreateEvent.Builder().path(mkOp.path)
+      return new Event[] { new Event.CreateEvent.Builder().path(mkOp.path)
           .ctime(mkOp.timestamp)
           .ownerName(mkOp.permissions.getUserName())
           .groupName(mkOp.permissions.getGroupName())
           .perms(mkOp.permissions.getPermission())
-          .iNodeType(Event.CreateEvent.INodeType.DIRECTORY).build()};
-    } else if (op.opCode == FSEditLogOpCodes.OP_SET_PERMISSIONS) {
+          .iNodeType(Event.CreateEvent.INodeType.DIRECTORY).build() };
+    case OP_SET_PERMISSIONS:
       FSEditLogOp.SetPermissionsOp permOp = (FSEditLogOp.SetPermissionsOp) op;
-      return new Event[]{new Event.MetadataUpdateEvent.Builder()
+      return new Event[] { new Event.MetadataUpdateEvent.Builder()
           .metadataType(Event.MetadataUpdateEvent.MetadataType.PERMS)
           .path(permOp.src)
-          .perms(permOp.permissions).build()};
-    } else if (op.opCode == FSEditLogOpCodes.OP_SET_OWNER) {
+          .perms(permOp.permissions).build() };
+    case OP_SET_OWNER:
       FSEditLogOp.SetOwnerOp ownOp = (FSEditLogOp.SetOwnerOp) op;
-      return new Event[]{new Event.MetadataUpdateEvent.Builder()
+      return new Event[] { new Event.MetadataUpdateEvent.Builder()
           .metadataType(Event.MetadataUpdateEvent.MetadataType.OWNER)
           .path(ownOp.src)
-          .ownerName(ownOp.username).groupName(ownOp.groupname).build()};
-    } else if (op.opCode == FSEditLogOpCodes.OP_TIMES) {
+          .ownerName(ownOp.username).groupName(ownOp.groupname).build() };
+    case OP_TIMES:
       FSEditLogOp.TimesOp timesOp = (FSEditLogOp.TimesOp) op;
-      return new Event[]{new Event.MetadataUpdateEvent.Builder()
+      return new Event[] { new Event.MetadataUpdateEvent.Builder()
           .metadataType(Event.MetadataUpdateEvent.MetadataType.TIMES)
           .path(timesOp.path)
-          .atime(timesOp.atime).mtime(timesOp.mtime).build()};
-    } else if (op.opCode == FSEditLogOpCodes.OP_SYMLINK) {
+          .atime(timesOp.atime).mtime(timesOp.mtime).build() };
+    case OP_SYMLINK:
       FSEditLogOp.SymlinkOp symOp = (FSEditLogOp.SymlinkOp) op;
-      return new Event[]{new Event.CreateEvent.Builder().path(symOp.path)
+      return new Event[] { new Event.CreateEvent.Builder().path(symOp.path)
           .ctime(symOp.atime)
           .ownerName(symOp.permissionStatus.getUserName())
           .groupName(symOp.permissionStatus.getGroupName())
           .perms(symOp.permissionStatus.getPermission())
           .symlinkTarget(symOp.value)
-          .iNodeType(Event.CreateEvent.INodeType.SYMLINK).build()};
-    } else if (op.opCode == FSEditLogOpCodes.OP_REMOVE_XATTR) {
+          .iNodeType(Event.CreateEvent.INodeType.SYMLINK).build() };
+    case OP_REMOVE_XATTR:
       FSEditLogOp.RemoveXAttrOp rxOp = (FSEditLogOp.RemoveXAttrOp) op;
-      return new Event[]{new Event.MetadataUpdateEvent.Builder()
+      return new Event[] { new Event.MetadataUpdateEvent.Builder()
           .metadataType(Event.MetadataUpdateEvent.MetadataType.XATTRS)
           .path(rxOp.src)
           .xAttrs(rxOp.xAttrs)
-          .xAttrsRemoved(true).build()};
-    } else if (op.opCode == FSEditLogOpCodes.OP_SET_XATTR) {
+          .xAttrsRemoved(true).build() };
+    case OP_SET_XATTR:
       FSEditLogOp.SetXAttrOp sxOp = (FSEditLogOp.SetXAttrOp) op;
-      return new Event[]{new Event.MetadataUpdateEvent.Builder()
+      return new Event[] { new Event.MetadataUpdateEvent.Builder()
           .metadataType(Event.MetadataUpdateEvent.MetadataType.XATTRS)
           .path(sxOp.src)
           .xAttrs(sxOp.xAttrs)
-          .xAttrsRemoved(false).build()};
-    } else if (op.opCode == FSEditLogOpCodes.OP_SET_ACL) {
+          .xAttrsRemoved(false).build() };
+    case OP_SET_ACL:
       FSEditLogOp.SetAclOp saOp = (FSEditLogOp.SetAclOp) op;
-      return new Event[]{new Event.MetadataUpdateEvent.Builder()
+      return new Event[] { new Event.MetadataUpdateEvent.Builder()
           .metadataType(Event.MetadataUpdateEvent.MetadataType.ACLS)
           .path(saOp.src)
-          .acls(saOp.aclEntries).build()};
-    } else {
+          .acls(saOp.aclEntries).build() };
+    default:
       return null;
     }
   }

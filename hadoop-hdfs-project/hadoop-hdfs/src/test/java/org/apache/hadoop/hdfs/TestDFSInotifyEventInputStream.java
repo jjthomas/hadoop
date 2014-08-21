@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.XAttrSetFlag;
 import org.apache.hadoop.fs.permission.AclEntry;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.inotify.Event;
+import org.apache.hadoop.hdfs.inotify.MissingEventsException;
 import org.apache.hadoop.hdfs.qjournal.MiniQJMHACluster;
 import org.apache.hadoop.hdfs.server.namenode.FSEditLogOpCodes;
 import org.apache.hadoop.hdfs.server.namenode.ha.HATestUtil;
@@ -49,7 +50,7 @@ public class TestDFSInotifyEventInputStream {
       TestDFSInotifyEventInputStream.class);
 
   private static Event waitForNextEvent(DFSInotifyEventInputStream eis)
-    throws IOException {
+    throws IOException, MissingEventsException {
     Event next = null;
     while ((next = eis.poll()) == null);
     return next;
@@ -73,7 +74,7 @@ public class TestDFSInotifyEventInputStream {
   @Test(timeout = 120000)
   @SuppressWarnings("deprecation")
   public void testBasic() throws IOException, URISyntaxException,
-      InterruptedException {
+      InterruptedException, MissingEventsException {
     Configuration conf = new HdfsConfiguration();
     conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, BLOCK_SIZE);
     conf.setBoolean(DFSConfigKeys.DFS_NAMENODE_ACLS_ENABLED_KEY, true);
@@ -100,7 +101,7 @@ public class TestDFSInotifyEventInputStream {
       OutputStream os = client.create("/file2", true, (short) 2, BLOCK_SIZE);
       os.write(new byte[BLOCK_SIZE]);
       os.close(); // CloseOp -> CloseEvent
-      // AddOp -> ReopenEvent
+      // AddOp -> AppendEvent
       os = client.append("/file2", BLOCK_SIZE, null, null);
       os.write(new byte[BLOCK_SIZE]);
       os.close(); // CloseOp -> CloseEvent
@@ -108,7 +109,7 @@ public class TestDFSInotifyEventInputStream {
       client.open("/file2").read(new byte[1]); // TimesOp -> MetadataUpdateEvent
       // SetReplicationOp -> MetadataUpdateEvent
       client.setReplication("/file2", (short) 1);
-      // ConcatDeleteOp -> ReopenEvent, UnlinkEvent, CloseEvent
+      // ConcatDeleteOp -> AppendEvent, UnlinkEvent, CloseEvent
       client.concat("/file2", new String[]{"/file3"});
       client.delete("/file2", false); // DeleteOp -> UnlinkEvent
       client.mkdirs("/dir", null, false); // MkdirOp -> CreateEvent
@@ -169,8 +170,8 @@ public class TestDFSInotifyEventInputStream {
 
       // AddOp
       next = waitForNextEvent(eis);
-      Assert.assertTrue(next.getEventType() == Event.EventType.REOPEN);
-      Assert.assertTrue(((Event.ReopenEvent) next).getPath().equals("/file2"));
+      Assert.assertTrue(next.getEventType() == Event.EventType.APPEND);
+      Assert.assertTrue(((Event.AppendEvent) next).getPath().equals("/file2"));
 
       // CloseOp
       next = waitForNextEvent(eis);
@@ -196,8 +197,8 @@ public class TestDFSInotifyEventInputStream {
 
       // ConcatDeleteOp
       next = waitForNextEvent(eis);
-      Assert.assertTrue(next.getEventType() == Event.EventType.REOPEN);
-      Assert.assertTrue(((Event.ReopenEvent) next).getPath().equals("/file2"));
+      Assert.assertTrue(next.getEventType() == Event.EventType.APPEND);
+      Assert.assertTrue(((Event.AppendEvent) next).getPath().equals("/file2"));
       next = waitForNextEvent(eis);
       Assert.assertTrue(next.getEventType() == Event.EventType.UNLINK);
       Event.UnlinkEvent ue2 = (Event.UnlinkEvent) next;
@@ -307,7 +308,8 @@ public class TestDFSInotifyEventInputStream {
   }
 
   @Test(timeout = 120000)
-  public void testNNFailover() throws IOException, URISyntaxException {
+  public void testNNFailover() throws IOException, URISyntaxException,
+      MissingEventsException {
     Configuration conf = new HdfsConfiguration();
     MiniQJMHACluster cluster = new MiniQJMHACluster.Builder(conf).build();
 
@@ -338,7 +340,7 @@ public class TestDFSInotifyEventInputStream {
   }
 
   @Test(timeout = 120000)
-  public void testTwoActiveNNs() throws IOException {
+  public void testTwoActiveNNs() throws IOException, MissingEventsException {
     Configuration conf = new HdfsConfiguration();
     MiniQJMHACluster cluster = new MiniQJMHACluster.Builder(conf).build();
 
@@ -382,7 +384,7 @@ public class TestDFSInotifyEventInputStream {
 
   @Test(timeout = 120000)
   public void testReadEventsWithTimeout() throws IOException,
-      InterruptedException {
+      InterruptedException, MissingEventsException {
     Configuration conf = new HdfsConfiguration();
     MiniQJMHACluster cluster = new MiniQJMHACluster.Builder(conf).build();
 

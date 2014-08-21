@@ -1475,7 +1475,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
   }
 
   @Override // ClientProtocol
-  public long getCurrentTxid() throws IOException {
+  public long getCurrentEditLogTxid() throws IOException {
     namesystem.checkOperation(OperationCategory.READ); // only active
     namesystem.checkSuperuserPrivilege();
     // if it's not yet open for write, we may be in the process of transitioning
@@ -1494,8 +1494,10 @@ class NameNodeRpcServer implements NamenodeProtocols {
       // no-QJM case only) if a in-progress segment is finalized under us ...
       // no need to throw an exception back to the client in this case
     } catch (FileNotFoundException e) {
+      LOG.debug("Tried to read from deleted or moved edit log segment", e);
       return null;
     } catch (TransferFsImage.HttpGetFailedException e) {
+      LOG.debug("Tried to read from deleted edit log segment", e);
       return null;
     }
   }
@@ -1521,10 +1523,11 @@ class NameNodeRpcServer implements NamenodeProtocols {
 
     List<Event> events = Lists.newArrayList();
     long maxSeenTxid = -1;
+    long firstSeenTxid = -1;
 
     if (syncTxid > 0 && txid > syncTxid) {
       // we can't read past syncTxid, so there's no point in going any further
-      return new EventsList(events, maxSeenTxid);
+      return new EventsList(events, firstSeenTxid, maxSeenTxid, syncTxid);
     }
 
     Collection<EditLogInputStream> streams = null;
@@ -1536,7 +1539,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       // will result
       LOG.info("NN is transitioning from active to standby and FSEditLog " +
       "is closed -- could not read edits");
-      return new EventsList(events, maxSeenTxid);
+      return new EventsList(events, firstSeenTxid, maxSeenTxid, syncTxid);
     }
 
     outer:
@@ -1560,6 +1563,9 @@ class NameNodeRpcServer implements NamenodeProtocols {
           if (op.getTransactionId() > maxSeenTxid) {
             maxSeenTxid = op.getTransactionId();
           }
+          if (firstSeenTxid == -1) {
+            firstSeenTxid = op.getTransactionId();
+          }
           if (events.size() >= maxEventsPerRPC || (syncTxid > 0 &&
               op.getTransactionId() == syncTxid)) {
             // we're done
@@ -1571,7 +1577,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       }
     }
 
-    return new EventsList(events, maxSeenTxid);
+    return new EventsList(events, firstSeenTxid, maxSeenTxid, syncTxid);
   }
 }
 

@@ -665,15 +665,15 @@ message CheckAccessRequestProto {
 message CheckAccessResponseProto { // void response
 }
 
-message GetCurrentTxidRequestProto {
+message GetCurrentEditLogTxidRequestProto {
 }
 
-message GetCurrentTxidResponseProto {
+message GetCurrentEditLogTxidResponseProto {
   required int64 txid = 1;
 }
 
 message GetEditsFromTxidRequestProto {
-  required uint64 txid = 1;
+  required int64 txid = 1;
 }
 
 message GetEditsFromTxidResponseProto {
@@ -817,8 +817,8 @@ service ClientNamenodeProtocol {
       returns(ListEncryptionZonesResponseProto);
   rpc getEZForPath(GetEZForPathRequestProto)
       returns(GetEZForPathResponseProto);
-  rpc getCurrentTxid(GetCurrentTxidRequestProto)
-      returns(GetCurrentTxidResponseProto);
+  rpc getCurrentEditLogTxid(GetCurrentEditLogTxidRequestProto)
+      returns(GetCurrentEditLogTxidResponseProto);
   rpc getEditsFromTxid(GetEditsFromTxidRequestProto)
       returns(GetEditsFromTxidResponseProto);
 }

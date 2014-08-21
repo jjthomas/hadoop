@@ -27,13 +27,15 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import java.util.List;
 
 /**
- * Events sent by the inotify system.
+ * Events sent by the inotify system. Note that no events are necessarily sent
+ * when a file is opened for read (although a MetadataUpdateEvent will be sent
+ * if the atime is updated).
  */
 @InterfaceAudience.Public
 @InterfaceStability.Unstable
 public abstract class Event {
   public static enum EventType {
-    CREATE, CLOSE, REOPEN, RENAME, METADATA, UNLINK
+    CREATE, CLOSE, APPEND, RENAME, METADATA, UNLINK
   }
 
   private EventType eventType;
@@ -410,11 +412,11 @@ public abstract class Event {
   /**
    * Sent when an existing file is opened for append.
    */
-  public static class ReopenEvent extends Event {
+  public static class AppendEvent extends Event {
     private String path;
 
-    public ReopenEvent(String path) {
-      super(EventType.REOPEN);
+    public AppendEvent(String path) {
+      super(EventType.APPEND);
       this.path = path;
     }
 

@@ -91,8 +91,8 @@ import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetBlo
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetBlockLocationsResponseProto.Builder;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetContentSummaryRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetContentSummaryResponseProto;
-import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetCurrentTxidRequestProto;
-import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetCurrentTxidResponseProto;
+import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetCurrentEditLogTxidRequestProto;
+import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetCurrentEditLogTxidResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetDataEncryptionKeyRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetDataEncryptionKeyResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetDatanodeReportRequestProto;
@@ -1413,11 +1413,11 @@ public class ClientNamenodeProtocolServerSideTranslatorPB implements
     return VOID_CHECKACCESS_RESPONSE;
   }
 
-  public GetCurrentTxidResponseProto getCurrentTxid(RpcController controller,
-      GetCurrentTxidRequestProto req) throws ServiceException {
+  public GetCurrentEditLogTxidResponseProto getCurrentEditLogTxid(RpcController controller,
+      GetCurrentEditLogTxidRequestProto req) throws ServiceException {
     try {
-      return GetCurrentTxidResponseProto.newBuilder().setTxid(
-          server.getCurrentTxid()).build();
+      return GetCurrentEditLogTxidResponseProto.newBuilder().setTxid(
+          server.getCurrentEditLogTxid()).build();
     } catch (IOException e) {
       throw new ServiceException(e);
     }

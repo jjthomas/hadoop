@@ -1944,4 +1944,9 @@ public class DistributedFileSystem extends FileSystem {
   public DFSInotifyEventInputStream getInotifyEventStream() throws IOException {
     return dfs.getInotifyEventStream();
   }
+
+  public DFSInotifyEventInputStream getInotifyEventStream(long lastReadTxid)
+      throws IOException {
+    return dfs.getInotifyEventStream(lastReadTxid);
+  }
 }

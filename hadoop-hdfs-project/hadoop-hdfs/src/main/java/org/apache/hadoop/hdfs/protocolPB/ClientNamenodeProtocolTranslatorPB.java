@@ -96,7 +96,7 @@ import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetAdd
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetBlockLocationsRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetBlockLocationsResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetContentSummaryRequestProto;
-import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetCurrentTxidRequestProto;
+import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetCurrentEditLogTxidRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetDataEncryptionKeyRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetDataEncryptionKeyResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.GetDatanodeReportRequestProto;
@@ -1435,11 +1435,11 @@ public class ClientNamenodeProtocolTranslatorPB implements
     }
   }
 
-  public long getCurrentTxid() throws IOException {
-    GetCurrentTxidRequestProto req = GetCurrentTxidRequestProto
+  public long getCurrentEditLogTxid() throws IOException {
+    GetCurrentEditLogTxidRequestProto req = GetCurrentEditLogTxidRequestProto
         .getDefaultInstance();
     try {
-      return rpcProxy.getCurrentTxid(null, req).getTxid();
+      return rpcProxy.getCurrentEditLogTxid(null, req).getTxid();
     } catch (ServiceException e) {
       throw ProtobufHelper.getRemoteException(e);
     }

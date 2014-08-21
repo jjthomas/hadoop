@@ -56,6 +56,17 @@ import com.google.common.collect.Sets;
 public class JournalSet implements JournalManager {
 
   static final Log LOG = LogFactory.getLog(FSEditLog.class);
+
+  private static final Comparator<EditLogInputStream>
+    LOCAL_LOG_PREFERENCE_COMPARATOR = new Comparator<EditLogInputStream>() {
+    @Override
+    public int compare(EditLogInputStream elis1, EditLogInputStream elis2) {
+      // we want local logs to be ordered earlier in the collection, and true
+      // is considered larger than false, so we want to invert the booleans here
+      return ComparisonChain.start().compare(!elis1.isLocalLog(),
+          !elis2.isLocalLog()).result();
+    }
+  };
   
   static final public Comparator<EditLogInputStream>
     EDIT_LOG_INPUT_STREAM_COMPARATOR = new Comparator<EditLogInputStream>() {
@@ -180,6 +191,8 @@ public class JournalSet implements JournalManager {
   private final List<JournalAndStream> journals =
       new CopyOnWriteArrayList<JournalSet.JournalAndStream>();
   final int minimumRedundantJournals;
+
+  private boolean closed;
   
   JournalSet(int minimumRedundantResources) {
     this.minimumRedundantJournals = minimumRedundantResources;
@@ -233,6 +246,11 @@ public class JournalSet implements JournalManager {
         jas.close();
       }
     }, "close journal");
+    closed = true;
+  }
+
+  public boolean isOpen() {
+    return !closed;
   }
 
   /**
@@ -297,6 +315,9 @@ public class JournalSet implements JournalManager {
             acc.add(elis);
           }
         } else if (accFirstTxId < elis.getFirstTxId()) {
+          // try to read from the local logs first since the throughput should
+          // be higher
+          Collections.sort(acc, LOCAL_LOG_PREFERENCE_COMPARATOR);
           outStreams.add(new RedundantEditLogInputStream(acc, fromTxId));
           acc.clear();
           acc.add(elis);
@@ -308,6 +329,7 @@ public class JournalSet implements JournalManager {
       }
     }
     if (!acc.isEmpty()) {
+      Collections.sort(acc, LOCAL_LOG_PREFERENCE_COMPARATOR);
       outStreams.add(new RedundantEditLogInputStream(acc, fromTxId));
       acc.clear();
     }
