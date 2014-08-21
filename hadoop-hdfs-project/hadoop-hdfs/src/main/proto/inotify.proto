@@ -37,7 +37,7 @@ import "hdfs.proto";
 enum EventType {
   EVENT_CREATE = 0x0;
   EVENT_CLOSE = 0x1;
-  EVENT_REOPEN = 0x2;
+  EVENT_APPEND = 0x2;
   EVENT_RENAME = 0x3;
   EVENT_METADATA = 0x4;
   EVENT_UNLINK = 0x5;
@@ -80,7 +80,7 @@ message CloseEventProto {
   required int64 timestamp = 3;
 }
 
-message ReopenEventProto {
+message AppendEventProto {
   required string path = 1;
 }
 
@@ -111,5 +111,7 @@ message UnlinkEventProto {
 
 message EventsListProto {
   repeated EventProto events = 1;
-  required int64 lastTxid = 2;
+  required int64 firstTxid = 2;
+  required int64 lastTxid = 3;
+  required int64 syncTxid = 4;
 }

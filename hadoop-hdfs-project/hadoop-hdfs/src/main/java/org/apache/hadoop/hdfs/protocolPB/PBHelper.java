@@ -2472,10 +2472,10 @@ public class PBHelper {
         events.add(new Event.RenameEvent(rename.getSrcPath(), rename.getDestPath(),
             rename.getTimestamp()));
         break;
-      case EVENT_REOPEN:
-        InotifyProtos.ReopenEventProto reopen =
-            InotifyProtos.ReopenEventProto.parseFrom(p.getContents());
-        events.add(new Event.ReopenEvent(reopen.getPath()));
+      case EVENT_APPEND:
+        InotifyProtos.AppendEventProto reopen =
+            InotifyProtos.AppendEventProto.parseFrom(p.getContents());
+        events.add(new Event.AppendEvent(reopen.getPath()));
         break;
       case EVENT_UNLINK:
         InotifyProtos.UnlinkEventProto unlink =
@@ -2487,7 +2487,8 @@ public class PBHelper {
             p.getType());
       }
     }
-    return new EventsList(events, resp.getEventsList().getLastTxid());
+    return new EventsList(events, resp.getEventsList().getFirstTxid(),
+        resp.getEventsList().getLastTxid(), resp.getEventsList().getSyncTxid());
   }
 
   public static GetEditsFromTxidResponseProto convertEditsResponse(EventsList el) {
@@ -2562,12 +2563,12 @@ public class PBHelper {
                     .setTimestamp(re.getTimestamp()).build().toByteString()
             ).build());
         break;
-      case REOPEN:
-        Event.ReopenEvent re2 = (Event.ReopenEvent) e;
+      case APPEND:
+        Event.AppendEvent re2 = (Event.AppendEvent) e;
         builder.addEvents(InotifyProtos.EventProto.newBuilder()
-            .setType(InotifyProtos.EventType.EVENT_REOPEN)
+            .setType(InotifyProtos.EventType.EVENT_APPEND)
             .setContents(
-                InotifyProtos.ReopenEventProto.newBuilder()
+                InotifyProtos.AppendEventProto.newBuilder()
                     .setPath(re2.getPath()).build().toByteString()
             ).build());
         break;
@@ -2585,7 +2586,9 @@ public class PBHelper {
         throw new RuntimeException("Unexpected inotify event: " + e);
       }
     }
+    builder.setFirstTxid(el.getFirstTxid());
     builder.setLastTxid(el.getLastTxid());
+    builder.setSyncTxid(el.getSyncTxid());
     return GetEditsFromTxidResponseProto.newBuilder().setEventsList(
         builder.build()).build();
   }

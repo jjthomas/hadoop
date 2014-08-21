@@ -2,6 +2,7 @@ package org.apache.hadoop.hdfs;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.inotify.Event;
+import org.apache.hadoop.hdfs.inotify.MissingEventsException;
 import org.apache.hadoop.hdfs.qjournal.MiniQJMHACluster;
 import org.apache.hadoop.util.Time;
 import org.junit.Test;
@@ -16,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 public class InotifyPerformanceRig {
 
   public boolean takeEvent(DFSInotifyEventInputStream eis) throws
-  IOException, InterruptedException {
+  IOException, InterruptedException, MissingEventsException {
     return eis.poll(1, TimeUnit.SECONDS) != null;
     // URL u = new URL("http://www.google.com");
     // u.getContent();

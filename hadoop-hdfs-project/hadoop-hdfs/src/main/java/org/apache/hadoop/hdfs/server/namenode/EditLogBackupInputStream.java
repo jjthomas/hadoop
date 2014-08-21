@@ -147,4 +147,8 @@ class EditLogBackupInputStream extends EditLogInputStream {
   public void setMaxOpSize(int maxOpSize) {
     reader.setMaxOpSize(maxOpSize);
   }
+
+  @Override public boolean isLocalLog() {
+    return true;
+  }
 }

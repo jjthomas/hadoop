@@ -1376,9 +1376,18 @@ public interface ClientProtocol {
   @Idempotent
   public void checkAccess(String path, FsAction mode) throws IOException;
 
+  /**
+   * Get the highest txid the NameNode knows has been written to the edit
+   * log, or -1 if the NameNode's edit log is not yet open for write. Used as
+   * the starting point for the inotify event stream.
+   */
   @Idempotent
-  public long getCurrentTxid() throws IOException;
+  public long getCurrentEditLogTxid() throws IOException;
 
+  /**
+   * Get an ordered list of events corresponding to the edit log transactions
+   * from txid onwards.
+   */
   @Idempotent
   public EventsList getEditsFromTxid(long txid) throws IOException;
 }
