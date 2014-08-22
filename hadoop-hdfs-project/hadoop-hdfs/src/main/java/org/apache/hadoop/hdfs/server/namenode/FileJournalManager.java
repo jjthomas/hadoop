@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Comparator;
 import java.util.Collections;
+import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -50,6 +51,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.ComparisonChain;
+import org.apache.hadoop.util.DataChecksum;
 
 /**
  * Journal manager for the common case of edits files being written
@@ -192,13 +194,13 @@ public class FileJournalManager implements JournalManager {
         continue;
       }
       if (elf.isInProgress()) {
-        try {
-          elf.validateLog();
-        } catch (IOException e) {
-          LOG.error("got IOException while trying to validate header of " +
-              elf + ".  Skipping.", e);
-          continue;
-        }
+        // try { elf.validateLog(); } catch (IOException e) {}
+        elf.lastTxId = 10000000;
+        // try { Thread.sleep(10); } catch (InterruptedException e) {}
+        //byte[] buffer = new byte[1024 * 1024];
+        //new Random(0L).nextBytes(buffer);
+        //DataChecksum.newDataChecksum(DataChecksum.Type.CRC32C, 512)
+        //    .calculateChunkedSums(buffer, 0, buffer.length, new byte[8 * 1024], 0);
       }
       if (elf.getFirstTxId() >= firstTxId) {
         ret.add(new RemoteEditLog(elf.firstTxId, elf.lastTxId,
@@ -337,11 +339,8 @@ public class FileJournalManager implements JournalManager {
         }
         try {
           elf.validateLog();
-        } catch (IOException e) {
-          LOG.error("got IOException while trying to validate header of " +
-              elf + ".  Skipping.", e);
-          continue;
-        }
+        } catch (IOException e) {}
+        // elf.lastTxId = 10000000;
       }
       if (elf.lastTxId < fromTxId) {
         assert elf.lastTxId != HdfsConstants.INVALID_TXID;

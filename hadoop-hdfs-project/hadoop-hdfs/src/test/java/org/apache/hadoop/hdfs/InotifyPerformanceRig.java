@@ -27,7 +27,7 @@ public class InotifyPerformanceRig {
   @Test
   public void test() throws IOException, InterruptedException {
     final int numInotifyClients = 1;
-    final int numOps = 100;
+    final int numOps = 10000;
 
     Configuration conf = new HdfsConfiguration();
     MiniQJMHACluster cluster = new MiniQJMHACluster.Builder(conf).build();
@@ -35,6 +35,7 @@ public class InotifyPerformanceRig {
     try {
       cluster.getDfsCluster().waitActive();
       cluster.getDfsCluster().transitionToActive(0);
+      cluster.getDfsCluster().shutdownNameNode(1); // kill the Standby
       final DFSClient client = new DFSClient(cluster.getDfsCluster()
           .getNameNode(0).getNameNodeAddress(), conf);
 
@@ -71,9 +72,12 @@ public class InotifyPerformanceRig {
               cl.countDown();
               int eventCount = 0;
               while (eventCount < numOps) {
-                if (takeEvent(eis)) {
-                  eventCount++;
-                }
+                // if (takeEvent(eis)) {
+                //  eventCount++;
+                // }
+                // takeEvent(eis);
+                // eventCount += 10;
+                eventCount += eis.dummyPoll();
               }
             } catch (Exception e) {
               System.out.println("Failed... " + e + ", " + e.getMessage());
