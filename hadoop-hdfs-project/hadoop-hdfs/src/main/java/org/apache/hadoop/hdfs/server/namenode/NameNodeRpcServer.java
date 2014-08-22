@@ -164,6 +164,7 @@ import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.tools.proto.GetUserMappingsProtocolProtos.GetUserMappingsProtocolService;
 import org.apache.hadoop.tools.protocolPB.GetUserMappingsProtocolPB;
 import org.apache.hadoop.tools.protocolPB.GetUserMappingsProtocolServerSideTranslatorPB;
+import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.VersionInfo;
 import org.apache.hadoop.util.VersionUtil;
 
@@ -1542,6 +1543,18 @@ class NameNodeRpcServer implements NamenodeProtocols {
       return new EventsList(events, firstSeenTxid, maxSeenTxid, syncTxid);
     }
 
+    /* long start = Time.monotonicNow();
+    //    byte[] buffer = new byte[1024 * 1024];
+    //    new Random(0L).nextBytes(buffer);
+    //    DataChecksum.newDataChecksum(DataChecksum.Type.CRC32C, 512)
+    //        .calculateChunkedSums(buffer, 0, buffer.length, new byte[8 * 1024], 0);
+    //    try {
+    //      Thread.sleep(3);
+    //    } catch (InterruptedException e) {
+    //
+    //    } */
+
+
     boolean breakOuter = false;
     for (EditLogInputStream elis : streams) {
       // our assumption in this code is the EditLogInputStreams are ordered by
@@ -1582,7 +1595,23 @@ class NameNodeRpcServer implements NamenodeProtocols {
       }
     }
 
+    /* System.out.println("EXECUTION TIME: " + (Time.monotonicNow() - start)); */
+
+    // return new EventsList(events, maxSeenTxid);
     return new EventsList(events, firstSeenTxid, maxSeenTxid, syncTxid);
   }
+
+  /* Dummy
+  @Override // ClientProtocol
+  public EventsList getEditsFromTxid(long txid) throws IOException {
+    namesystem.checkOperation(OperationCategory.READ); // only active
+    namesystem.checkSuperuserPrivilege();
+    byte[] buffer = new byte[1024 * 1024];
+    new Random(0L).nextBytes(buffer);
+    DataChecksum.newDataChecksum(DataChecksum.Type.CRC32C, 512)
+        .calculateChunkedSums(buffer, 0, buffer.length, new byte[8 * 1024], 0);
+    return new EventsList(Lists.<Event>newArrayList(), -1);
+  }
+  */
 }
 

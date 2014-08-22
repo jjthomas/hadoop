@@ -77,6 +77,18 @@ public class DFSInotifyEventInputStream {
     this.lastReadTxid = lastReadTxid;
   }
 
+  public int dummyPoll() throws IOException {
+    EventsList el = namenode.getEditsFromTxid(lastReadTxid + 1);
+    // some stall proportional to number of edits returned?
+    if (el.getSyncTxid() != 0) {
+      long oldTxid = lastReadTxid;
+      lastReadTxid = el.getSyncTxid();
+      return (int) (lastReadTxid - oldTxid);
+    } else {
+      return 0;
+    }
+  }
+
   /**
    * Returns the next event in the stream or null if no new events are currently
    * available.
