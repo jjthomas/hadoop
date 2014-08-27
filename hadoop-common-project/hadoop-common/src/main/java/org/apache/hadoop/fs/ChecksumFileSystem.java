@@ -382,7 +382,7 @@ public abstract class ChecksumFileSystem extends FilterFileSystem {
                           Progressable progress)
       throws IOException {
       super(DataChecksum.newDataChecksum(DataChecksum.Type.CRC32,
-          fs.getBytesPerSum()), fs.getBytesPerSum(), 4);
+          fs.getBytesPerSum()));
       int bytesPerSum = fs.getBytesPerSum();
       this.datas = fs.getRawFileSystem().create(file, overwrite, bufferSize, 
                                          replication, blockSize, progress);

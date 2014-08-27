@@ -18,14 +18,13 @@
 
 package org.apache.hadoop.fs;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.zip.Checksum;
-
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.util.DataChecksum;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.zip.Checksum;
 
 /**
  * This is a generic output stream for generating checksums for
@@ -35,7 +34,7 @@ import org.apache.hadoop.util.DataChecksum;
 @InterfaceStability.Unstable
 abstract public class FSOutputSummer extends OutputStream {
   // data checksum
-  private DataChecksum sum;
+  private final DataChecksum sum;
   // internal buffer for storing data before it is checksumed
   private byte buf[];
   // internal buffer for storing checksum
@@ -43,36 +42,30 @@ abstract public class FSOutputSummer extends OutputStream {
   // The number of valid bytes in the buffer.
   private int count;
 
-  private int maxChunkSize;
-  private int checksumSize;
-
-  private static int BUFFER_NUM_CHUNKS = 10;
-
-  @VisibleForTesting
-  public static void setNumChunksToBuffer(int numChunks) {
-    BUFFER_NUM_CHUNKS = numChunks;
-  }
+  // We want this value to be a multiple of 3 because the native code checksums
+  // 3 chunks simultaneously. The chosen value of 9 strikes a balance between
+  // limiting the number of JNI calls and flushing to the DFSOutputStream
+  // relatively frequently.
+  private static final int BUFFER_NUM_CHUNKS = 9;
   
-  protected FSOutputSummer(DataChecksum sum, int maxChunkSize, int checksumSize) {
+  protected FSOutputSummer(DataChecksum sum) {
     this.sum = sum;
-    this.buf = new byte[maxChunkSize * BUFFER_NUM_CHUNKS];
-    this.checksum = new byte[checksumSize * BUFFER_NUM_CHUNKS];
-    this.maxChunkSize = maxChunkSize;
-    this.checksumSize = checksumSize;
+    this.buf = new byte[sum.getBytesPerChecksum() * BUFFER_NUM_CHUNKS];
+    this.checksum = new byte[sum.getChecksumSize() * BUFFER_NUM_CHUNKS];
     this.count = 0;
   }
-  
+
   /* write the data chunk in <code>b</code> staring at <code>offset</code> with
    * a length of <code>len > 0</code>, and its checksum
    */
   protected abstract void writeChunk(byte[] b, int bOffset, int bLen,
       byte[] checksum, int checksumOffset, int checksumLen) throws IOException;
-  
+
   /**
    * Check if the implementing OutputStream is closed and should no longer
    * accept writes. Implementations should do nothing if this stream is not
    * closed, and should throw an {@link IOException} if it is closed.
-   * 
+   *
    * @throws IOException if this stream is already closed.
    */
   protected abstract void checkClosed() throws IOException;
@@ -87,16 +80,16 @@ abstract public class FSOutputSummer extends OutputStream {
   }
 
   /**
-   * Writes <code>len</code> bytes from the specified byte array 
+   * Writes <code>len</code> bytes from the specified byte array
    * starting at offset <code>off</code> and generate a checksum for
    * each data chunk.
    *
    * <p> This method stores bytes from the given array into this
-   * stream's buffer before it gets checksumed. The buffer gets checksumed 
-   * and flushed to the underlying output stream when all data 
+   * stream's buffer before it gets checksumed. The buffer gets checksumed
+   * and flushed to the underlying output stream when all data
    * in a checksum chunk are in the buffer.  If the buffer is empty and
    * requested length is at least as large as the size of next checksum chunk
-   * size, this method will checksum and write the chunk directly 
+   * size, this method will checksum and write the chunk directly
    * to the underlying output stream.  Thus it avoids uneccessary data copy.
    *
    * @param      b     the data.
@@ -107,9 +100,9 @@ abstract public class FSOutputSummer extends OutputStream {
   @Override
   public synchronized void write(byte b[], int off, int len)
       throws IOException {
-    
+
     checkClosed();
-    
+
     if (off < 0 || len < 0 || off > b.length - len) {
       throw new ArrayIndexOutOfBoundsException();
     }
@@ -117,20 +110,21 @@ abstract public class FSOutputSummer extends OutputStream {
     for (int n=0;n<len;n+=write1(b, off+n, len-n)) {
     }
   }
-  
+
   /**
    * Write a portion of an array, flushing to the underlying
    * stream at most once if necessary.
    */
   private int write1(byte b[], int off, int len) throws IOException {
     if(count==0 && len>=buf.length) {
-      // local buffer is empty and user data has one chunk
-      // checksum and output data
+      // local buffer is empty and user buffer size >= local buffer size, so
+      // simply checksum the user buffer and send it directly to the underlying
+      // stream
       final int length = buf.length;
-      writeChecksumChunk(b, off, length);
+      writeChecksumChunks(b, off, length);
       return length;
     }
-    
+
     // copy user data to local buffer
     int bytesToCopy = buf.length-count;
     bytesToCopy = (len<bytesToCopy) ? len : bytesToCopy;
@@ -139,36 +133,53 @@ abstract public class FSOutputSummer extends OutputStream {
     if (count == buf.length) {
       // local buffer is full
       flushBuffer();
-    } 
+    }
     return bytesToCopy;
   }
 
   /* Forces any buffered output bytes to be checksumed and written out to
-   * the underlying output stream. 
+   * the underlying output stream.
    */
   protected synchronized void flushBuffer() throws IOException {
-    flushBuffer(false);
+    flushBuffer(false, true);
   }
 
-  /* Forces any buffered output bytes to be checksumed and written out to
-   * the underlying output stream.  If keep is true, then the state of 
-   * this object remains intact.
+  /* Forces buffered output bytes to be checksummed and written out to
+   * the underlying output stream. If there is a trailing partial chunk in the
+   * buffer,
+   * 1) flushPartial tells us whether to flush that chunk
+   * 2) if flushPartial is true, keep tells us whether to keep that chunk in the
+   * buffer (if flushPartial is false, it is always kept in the buffer)
    *
-   * Returns the number of bytes kept in the buffer (can be non-zero only if
-   * keep is true).
+   * Returns the number of bytes that were flushed but are still left in the
+   * buffer (can only be non-zero if keep is true).
    */
-  protected synchronized int flushBuffer(boolean keep) throws IOException {
-    if (count != 0) {
-      int bufLen = count;
-      count = 0;
-      writeChecksumChunk(buf, 0, bufLen);
-      if (keep) {
-        count = bufLen % maxChunkSize;
+  protected synchronized int flushBuffer(boolean keep,
+      boolean flushPartial) throws IOException {
+    int bufLen = count;
+    int partialLen = bufLen % sum.getBytesPerChecksum();
+    int lenToFlush = flushPartial ? bufLen : bufLen - partialLen;
+    if (lenToFlush != 0) {
+      writeChecksumChunks(buf, 0, lenToFlush);
+      if (!flushPartial || keep) {
+        count = partialLen;
         System.arraycopy(buf, bufLen - count, buf, 0, count);
+      } else {
+        count = 0;
       }
     }
 
-    return count;
+    // total bytes left minus unflushed bytes left
+    return count - (bufLen - lenToFlush);
+  }
+
+  /**
+   * Checksums all complete data chunks and flushes them to the underlying
+   * stream. If there is a trailing partial chunk, it is not flushed and is
+   * maintained in the buffer.
+   */
+  public void flush() throws IOException {
+    flushBuffer(false, false);
   }
 
   /**
@@ -177,16 +188,18 @@ abstract public class FSOutputSummer extends OutputStream {
   protected synchronized int getBufferedDataSize() {
     return count;
   }
-  
-  /** Generate checksum for the data chunk and output data chunk & checksum
+
+  /** Generate checksums for the given data chunks and output chunks & checksums
    * to the underlying output stream.
    */
-  private void writeChecksumChunk(byte b[], int off, int len)
+  private void writeChecksumChunks(byte b[], int off, int len)
   throws IOException {
     sum.calculateChunkedSums(b, off, len, checksum, 0);
-    for (int i = 0; i < len; i += maxChunkSize) {
-      writeChunk(b, off + i, Math.min(maxChunkSize, len - i), checksum,
-          i / maxChunkSize * checksumSize, checksumSize);
+    for (int i = 0; i < len; i += sum.getBytesPerChecksum()) {
+      int chunkLen = Math.min(sum.getBytesPerChecksum(), len - i);
+      int ckOffset = i / sum.getBytesPerChecksum() * sum.getChecksumSize();
+      writeChunk(b, off + i, chunkLen, checksum, ckOffset,
+          sum.getChecksumSize());
     }
   }
 
@@ -213,11 +226,12 @@ abstract public class FSOutputSummer extends OutputStream {
    */
   protected synchronized void setChecksumBufSize(int size) {
     this.buf = new byte[size];
-    this.checksum = new byte[((size - 1) / maxChunkSize + 1) * checksumSize];
+    this.checksum = new byte[((size - 1) / sum.getBytesPerChecksum() + 1) *
+        sum.getChecksumSize()];
     this.count = 0;
   }
 
   protected synchronized void resetChecksumBufSize() {
-    setChecksumBufSize(maxChunkSize * BUFFER_NUM_CHUNKS);
+    setChecksumBufSize(sum.getBytesPerChecksum() * BUFFER_NUM_CHUNKS);
   }
 }

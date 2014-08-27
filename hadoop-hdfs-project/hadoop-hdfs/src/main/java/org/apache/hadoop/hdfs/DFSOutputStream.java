@@ -1563,7 +1563,7 @@ public class DFSOutputStream extends FSOutputSummer
 
   private DFSOutputStream(DFSClient dfsClient, String src, Progressable progress,
       HdfsFileStatus stat, DataChecksum checksum) throws IOException {
-    super(checksum, checksum.getBytesPerChecksum(), checksum.getChecksumSize());
+    super(checksum);
     this.dfsClient = dfsClient;
     this.src = src;
     this.fileId = stat.getFileId();
@@ -1853,7 +1853,7 @@ public class DFSOutputStream extends FSOutputSummer
       boolean updateLength = syncFlags.contains(SyncFlag.UPDATE_LENGTH);
       synchronized (this) {
         // flush checksum buffer, but keep checksum buffer intact
-        int numKept = flushBuffer(true);
+        int numKept = flushBuffer(true, true);
         // bytesCurBlock potentially incremented if there was buffered data
 
         if (DFSClient.LOG.isDebugEnabled()) {

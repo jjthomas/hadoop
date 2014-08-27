@@ -338,7 +338,7 @@ public abstract class ChecksumFs extends FilterFs {
       final Progressable progress, final ChecksumOpt checksumOpt,
       final boolean createParent) throws IOException {
       super(DataChecksum.newDataChecksum(DataChecksum.Type.CRC32,
-          fs.getBytesPerSum()), fs.getBytesPerSum(), 4);
+          fs.getBytesPerSum()));
 
       // checksumOpt is passed down to the raw fs. Unless it implements
       // checksum impelemts internally, checksumOpt will be ignored.
