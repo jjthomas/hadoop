@@ -30,7 +30,6 @@ import java.util.List;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FSOutputSummer;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.HardLink;
 import org.apache.hadoop.fs.Path;
@@ -252,10 +251,6 @@ public class TestFileAppend{
 
       // create a new file.
       Path file1 = new Path("/complexFlush.dat");
-      // need to make sure the block size is a multiple of the FSOutputSummer
-      // buffer size so that we completely write out all full blocks before
-      // the checkFile() call
-      FSOutputSummer.setNumChunksToBuffer(1);
       FSDataOutputStream stm = AppendTestUtil.createFile(fs, file1, 1);
       System.out.println("Created file complexFlush.dat");
 
@@ -266,7 +261,9 @@ public class TestFileAppend{
         start += 29;
       }
       stm.write(fileContents, start, AppendTestUtil.FILE_SIZE -start);
-
+      // need to make sure we completely write out all full blocks before
+      // the checkFile() call (see FSOutputSummer#flush)
+      stm.flush();
       // verify that full blocks are sane
       checkFile(fs, file1, 1);
       stm.close();

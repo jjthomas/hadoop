@@ -34,7 +34,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FSOutputSummer;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -134,10 +133,6 @@ public class TestDecommissioningStatus {
 
   private FSDataOutputStream writeIncompleteFile(FileSystem fileSys, Path name,
       short repl) throws IOException {
-    // need to make sure the block size is a multiple of the FSOutputSummer
-    // buffer size so that we actually write out both file blocks during the
-    // incomplete write
-    FSOutputSummer.setNumChunksToBuffer(1);
     // create and write a file that contains three blocks of data
     FSDataOutputStream stm = fileSys.create(name, true, fileSys.getConf()
         .getInt(CommonConfigurationKeys.IO_FILE_BUFFER_SIZE_KEY, 4096), repl,
@@ -146,6 +141,9 @@ public class TestDecommissioningStatus {
     Random rand = new Random(seed);
     rand.nextBytes(buffer);
     stm.write(buffer);
+    // need to make sure that we actually write out both file blocks
+    // (see FSOutputSummer#flush)
+    stm.flush();
     // Do not close stream, return it
     // so that it is not garbage collected
     return stm;

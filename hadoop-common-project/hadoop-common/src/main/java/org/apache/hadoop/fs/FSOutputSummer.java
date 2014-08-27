@@ -44,7 +44,7 @@ abstract public class FSOutputSummer extends OutputStream {
 
   // We want this value to be a multiple of 3 because the native code checksums
   // 3 chunks simultaneously. The chosen value of 9 strikes a balance between
-  // limiting the number of JNI calls and flushing to the DFSOutputStream
+  // limiting the number of JNI calls and flushing to the underlying stream
   // relatively frequently.
   private static final int BUFFER_NUM_CHUNKS = 9;
   
