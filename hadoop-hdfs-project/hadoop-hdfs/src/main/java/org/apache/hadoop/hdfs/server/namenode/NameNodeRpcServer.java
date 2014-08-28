@@ -1542,7 +1542,7 @@ class NameNodeRpcServer implements NamenodeProtocols {
       return new EventsList(events, firstSeenTxid, maxSeenTxid, syncTxid);
     }
 
-    outer:
+    boolean breakOuter = false;
     for (EditLogInputStream elis : streams) {
       // our assumption in this code is the EditLogInputStreams are ordered by
       // starting txid
@@ -1553,7 +1553,8 @@ class NameNodeRpcServer implements NamenodeProtocols {
           // out of date that its segment has already been deleted, so the first
           // txid we get is greater than syncTxid
           if (syncTxid > 0 && op.getTransactionId() > syncTxid) {
-            break outer;
+            breakOuter = true;
+            break;
           }
 
           Event[] eventsFromOp = InotifyFSEditLogOpTranslator.translate(op);
@@ -1569,11 +1570,15 @@ class NameNodeRpcServer implements NamenodeProtocols {
           if (events.size() >= maxEventsPerRPC || (syncTxid > 0 &&
               op.getTransactionId() == syncTxid)) {
             // we're done
-            break outer;
+            breakOuter = true;
+            break;
           }
         }
       } finally {
         elis.close();
+      }
+      if (breakOuter) {
+        break;
       }
     }
 

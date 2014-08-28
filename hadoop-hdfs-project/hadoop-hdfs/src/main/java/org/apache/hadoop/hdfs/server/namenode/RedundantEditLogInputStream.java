@@ -280,7 +280,8 @@ class RedundantEditLogInputStream extends EditLogInputStream {
     }
   }
 
-  @Override public boolean isLocalLog() {
+  @Override
+  public boolean isLocalLog() {
     return streams[curIdx].isLocalLog();
   }
 }

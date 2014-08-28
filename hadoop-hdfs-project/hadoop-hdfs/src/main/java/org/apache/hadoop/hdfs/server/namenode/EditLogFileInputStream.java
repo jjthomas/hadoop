@@ -507,7 +507,8 @@ public class EditLogFileInputStream extends EditLogInputStream {
     }
   }
 
-  @Override public boolean isLocalLog() {
+  @Override
+  public boolean isLocalLog() {
     return log instanceof FileLog;
   }
 }

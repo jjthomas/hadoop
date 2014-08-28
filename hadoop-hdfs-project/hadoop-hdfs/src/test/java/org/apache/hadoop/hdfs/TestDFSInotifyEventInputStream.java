@@ -137,6 +137,8 @@ public class TestDFSInotifyEventInputStream {
       Assert.assertTrue(re.getSrcPath().equals("/file"));
       Assert.assertTrue(re.getTimestamp() > 0);
 
+      long eventsBehind = eis.getEventsBehindEstimate();
+
       // RenameOldOp
       next = waitForNextEvent(eis);
       Assert.assertTrue(next.getEventType() == Event.EventType.RENAME);
@@ -301,6 +303,13 @@ public class TestDFSInotifyEventInputStream {
 
       // Returns null when there are no further events
       Assert.assertTrue(eis.poll() == null);
+
+      // make sure the estimate hasn't changed since the above assertion
+      // tells us that we are fully caught up to the current namesystem state
+      // and we should not have been behind at all when eventsBehind was set
+      // either, since there were few enough events that they should have all
+      // been read to the client during the first poll() call
+      Assert.assertTrue(eis.getEventsBehindEstimate() == eventsBehind);
 
     } finally {
       cluster.shutdown();

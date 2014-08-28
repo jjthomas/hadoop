@@ -79,12 +79,16 @@ public class IPCLoggerChannel implements AsyncLogger {
   protected final InetSocketAddress addr;
   private QJournalProtocol proxy;
 
-  // executes tasks submitted to it serially, on a single thread, in FIFO order
-  // (generally used for write tasks that should not be reordered)
+  /**
+   * Executes tasks submitted to it serially, on a single thread, in FIFO order
+   * (generally used for write tasks that should not be reordered).
+   */
   private final ListeningExecutorService singleThreadExecutor;
-  // executes tasks submitted to it in parallel with each other and with those
-  // submitted to singleThreadExecutor (generally used for read tasks that can
-  // be safely reordered and interleaved with writes)
+  /**
+   * Executes tasks submitted to it in parallel with each other and with those
+   * submitted to singleThreadExecutor (generally used for read tasks that can
+   * be safely reordered and interleaved with writes).
+   */
   private final ListeningExecutorService parallelExecutor;
   private long ipcSerial = 0;
   private long epoch = -1;

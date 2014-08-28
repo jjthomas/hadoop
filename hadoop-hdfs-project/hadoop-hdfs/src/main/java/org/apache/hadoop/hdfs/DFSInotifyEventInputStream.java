@@ -26,9 +26,13 @@ import org.apache.hadoop.hdfs.inotify.Event;
 import org.apache.hadoop.hdfs.inotify.EventsList;
 import org.apache.hadoop.hdfs.inotify.MissingEventsException;
 import org.apache.hadoop.hdfs.protocol.ClientProtocol;
+import org.apache.hadoop.util.Time;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -44,20 +48,23 @@ import java.util.concurrent.TimeoutException;
 @InterfaceAudience.Public
 @InterfaceStability.Unstable
 public class DFSInotifyEventInputStream {
+  public static Logger LOG = LoggerFactory.getLogger(DFSInotifyEventInputStream
+      .class);
+
   private final ClientProtocol namenode;
   private Iterator<Event> it;
-  private boolean notifyMissingEvents;
   private long lastReadTxid;
-  // the most recent txid the NameNode told us it has sync'ed -- helps us
-  // determine how far behind we are in the edit stream
+  /**
+   * The most recent txid the NameNode told us it has sync'ed -- helps us
+   * determine how far behind we are in the edit stream.
+   */
   private long syncTxid;
-  // we want a cached thread pool rather than a single thread pool because
-  // when a call to the timed poll returns, its Callable may not actually have
-  // finished executing, so the Callable of a subsequent call to the timed poll
-  // would need a fresh thread to begin executing immediately
-  private ExecutorService ex = Executors.newCachedThreadPool();
+  /**
+   * Used to generate wait times in {@link DFSInotifyEventInputStream#take()}.
+   */
+  private Random rng = new Random();
 
-  private static final long INITIAL_WAIT_MS = 10;
+  private static final int INITIAL_WAIT_MS = 10;
 
   DFSInotifyEventInputStream(ClientProtocol namenode) throws IOException {
     this(namenode, namenode.getCurrentEditLogTxid()); // only consider new txn's
@@ -89,6 +96,7 @@ public class DFSInotifyEventInputStream {
   public Event poll() throws IOException, MissingEventsException {
     // need to keep retrying until the NN sends us the latest committed txid
     if (lastReadTxid == -1) {
+      LOG.debug("poll(): lastReadTxid is -1, reading current txid from NN");
       lastReadTxid = namenode.getCurrentEditLogTxid();
       return null;
     }
@@ -108,6 +116,8 @@ public class DFSInotifyEventInputStream {
               el.getFirstTxid());
         }
       } else {
+        LOG.debug("poll(): read no edits from the NN when requesting edits " +
+          "after " + lastReadTxid);
         return null;
       }
     }
@@ -145,46 +155,41 @@ public class DFSInotifyEventInputStream {
   }
 
   /**
-   * Returns the next event in the stream, waiting up to the specified amount
-   * of time for a new event. Returns null if a new event is not available at
-   * the end of the specified amount of time.
+   * Returns the next event in the stream, waiting up to the specified amount of
+   * time for a new event. Returns null if a new event is not available at the
+   * end of the specified amount of time. The time before the method returns may
+   * exceed the specified amount of time by up to the time required for an RPC
+   * to the NameNode.
    *
    * @param time number of units of the given TimeUnit to wait
    * @param tu the desired TimeUnit
    * @throws IOException see {@link DFSInotifyEventInputStream#poll()}
-   * @throws MissingEventsException see
-   * {@link DFSInotifyEventInputStream#poll()}
+   * @throws MissingEventsException
+   * see {@link DFSInotifyEventInputStream#poll()}
    * @throws InterruptedException if the calling thread is interrupted
    */
   public Event poll(long time, TimeUnit tu) throws IOException,
       InterruptedException, MissingEventsException {
-    Future<Event> f = ex.submit(new Callable<Event>() {
-      public Event call() throws IOException, MissingEventsException {
-        try {
-          return take();
-        } catch (InterruptedException e) {
-          // we've been cancelled
-          return null;
-        }
-      }
-    });
-    try {
-      return f.get(time, tu);
-    } catch (TimeoutException e) {
-      f.cancel(true);
-      return null;
-    } catch (ExecutionException e) {
-      if (e.getCause() instanceof RuntimeException || e.getCause() instanceof
-          Error) {
-        throw new UncheckedExecutionException(e.getCause());
+    long initialTime = Time.monotonicNow();
+    long totalWait = TimeUnit.MILLISECONDS.convert(time, tu);
+    long nextWait = INITIAL_WAIT_MS;
+    Event next = null;
+    while ((next = poll()) == null) {
+      long timeLeft = totalWait - (Time.monotonicNow() - initialTime);
+      if (timeLeft <= 0) {
+        LOG.debug("timed poll(): timed out");
+        break;
+      } else if (timeLeft < nextWait * 2) {
+        nextWait = timeLeft;
       } else {
-        if (e.getCause() instanceof IOException) {
-          throw (IOException) e.getCause();
-        } else {
-          throw (MissingEventsException) e.getCause();
-        }
+        nextWait *= 2;
       }
+      LOG.debug("timed poll(): poll() returned null, sleeping for " + nextWait +
+          " ms");
+      Thread.sleep(nextWait);
     }
+
+    return next;
   }
 
   /**
@@ -199,11 +204,18 @@ public class DFSInotifyEventInputStream {
   public Event take() throws IOException, InterruptedException,
       MissingEventsException {
     Event next = null;
-    long nextWait = INITIAL_WAIT_MS;
+    int nextWaitMin = INITIAL_WAIT_MS;
     while ((next = poll()) == null) {
-      Thread.sleep(nextWait);
-      nextWait *= 2;
+      // sleep for a random period between nextWaitMin and nextWaitMin * 2
+      // to avoid stampedes at the NN if there are multiple clients
+      int sleepTime = nextWaitMin + rng.nextInt(nextWaitMin);
+      LOG.debug("take(): poll() returned null, sleeping for " + sleepTime +
+          " ms");
+      Thread.sleep(sleepTime);
+      // the maximum sleep is 2 minutes
+      nextWaitMin = Math.min(60000, nextWaitMin * 2);
     }
+
     return next;
   }
 }

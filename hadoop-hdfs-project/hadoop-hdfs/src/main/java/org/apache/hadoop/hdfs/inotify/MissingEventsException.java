@@ -48,7 +48,7 @@ public class MissingEventsException extends Exception {
   public String toString() {
     return "We expected the next batch of events to start with transaction ID "
         + expectedTxid + ", but it instead started with transaction ID " +
-        actualTxid + ". Most likely the intervening transactions were garbage "
-        + "collected.";
+        actualTxid + ". Most likely the intervening transactions were cleaned "
+        + "up as part of checkpointing.";
   }
 }
