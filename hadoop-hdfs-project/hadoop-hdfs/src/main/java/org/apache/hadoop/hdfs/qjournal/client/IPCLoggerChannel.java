@@ -79,7 +79,13 @@ public class IPCLoggerChannel implements AsyncLogger {
   protected final InetSocketAddress addr;
   private QJournalProtocol proxy;
 
-  private final ListeningExecutorService executor;
+  // executes tasks submitted to it serially, on a single thread, in FIFO order
+  // (generally used for write tasks that should not be reordered)
+  private final ListeningExecutorService singleThreadExecutor;
+  // executes tasks submitted to it in parallel with each other and with those
+  // submitted to singleThreadExecutor (generally used for read tasks that can
+  // be safely reordered and interleaved with writes)
+  private final ListeningExecutorService parallelExecutor;
   private long ipcSerial = 0;
   private long epoch = -1;
   private long committedTxId = HdfsConstants.INVALID_TXID;
@@ -160,8 +166,10 @@ public class IPCLoggerChannel implements AsyncLogger {
         DFSConfigKeys.DFS_QJOURNAL_QUEUE_SIZE_LIMIT_KEY,
         DFSConfigKeys.DFS_QJOURNAL_QUEUE_SIZE_LIMIT_DEFAULT);
     
-    executor = MoreExecutors.listeningDecorator(
-        createExecutor());
+    singleThreadExecutor = MoreExecutors.listeningDecorator(
+        createSingleThreadExecutor());
+    parallelExecutor = MoreExecutors.listeningDecorator(
+        createParallelExecutor());
     
     metrics = IPCLoggerChannelMetrics.create(this);
   }
@@ -183,7 +191,8 @@ public class IPCLoggerChannel implements AsyncLogger {
   @Override
   public void close() {
     // No more tasks may be submitted after this point.
-    executor.shutdown();
+    singleThreadExecutor.shutdown();
+    parallelExecutor.shutdown();
     if (proxy != null) {
       // TODO: this can hang for quite some time if the client
       // is currently in the middle of a call to a downed JN.
@@ -230,14 +239,29 @@ public class IPCLoggerChannel implements AsyncLogger {
    * Separated out for easy overriding in tests.
    */
   @VisibleForTesting
-  protected ExecutorService createExecutor() {
+  protected ExecutorService createSingleThreadExecutor() {
     return Executors.newSingleThreadExecutor(
         new ThreadFactoryBuilder()
           .setDaemon(true)
-          .setNameFormat("Logger channel to " + addr)
+          .setNameFormat("Logger channel (from single-thread executor) to " +
+              addr)
           .setUncaughtExceptionHandler(
               UncaughtExceptionHandlers.systemExit())
           .build());
+  }
+
+  /**
+   * Separated out for easy overriding in tests.
+   */
+  @VisibleForTesting
+  protected ExecutorService createParallelExecutor() {
+    return Executors.newCachedThreadPool(
+        new ThreadFactoryBuilder()
+            .setDaemon(true)
+            .setNameFormat("Logger channel (from parallel executor) to " + addr)
+            .setUncaughtExceptionHandler(
+                UncaughtExceptionHandlers.systemExit())
+            .build());
   }
   
   @Override
@@ -286,7 +310,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   @VisibleForTesting
   void waitForAllPendingCalls() throws InterruptedException {
     try {
-      executor.submit(new Runnable() {
+      singleThreadExecutor.submit(new Runnable() {
         @Override
         public void run() {
         }
@@ -299,7 +323,7 @@ public class IPCLoggerChannel implements AsyncLogger {
 
   @Override
   public ListenableFuture<Boolean> isFormatted() {
-    return executor.submit(new Callable<Boolean>() {
+    return singleThreadExecutor.submit(new Callable<Boolean>() {
       @Override
       public Boolean call() throws IOException {
         return getProxy().isFormatted(journalId);
@@ -309,7 +333,7 @@ public class IPCLoggerChannel implements AsyncLogger {
 
   @Override
   public ListenableFuture<GetJournalStateResponseProto> getJournalState() {
-    return executor.submit(new Callable<GetJournalStateResponseProto>() {
+    return singleThreadExecutor.submit(new Callable<GetJournalStateResponseProto>() {
       @Override
       public GetJournalStateResponseProto call() throws IOException {
         GetJournalStateResponseProto ret =
@@ -323,7 +347,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   @Override
   public ListenableFuture<NewEpochResponseProto> newEpoch(
       final long epoch) {
-    return executor.submit(new Callable<NewEpochResponseProto>() {
+    return singleThreadExecutor.submit(new Callable<NewEpochResponseProto>() {
       @Override
       public NewEpochResponseProto call() throws IOException {
         return getProxy().newEpoch(journalId, nsInfo, epoch);
@@ -347,7 +371,7 @@ public class IPCLoggerChannel implements AsyncLogger {
     
     ListenableFuture<Void> ret = null;
     try {
-      ret = executor.submit(new Callable<Void>() {
+      ret = singleThreadExecutor.submit(new Callable<Void>() {
         @Override
         public Void call() throws IOException {
           throwIfOutOfSync();
@@ -464,7 +488,7 @@ public class IPCLoggerChannel implements AsyncLogger {
 
   @Override
   public ListenableFuture<Void> format(final NamespaceInfo nsInfo) {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws Exception {
         getProxy().format(journalId, nsInfo);
@@ -476,7 +500,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   @Override
   public ListenableFuture<Void> startLogSegment(final long txid,
       final int layoutVersion) {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
         getProxy().startLogSegment(createReqInfo(), txid, layoutVersion);
@@ -497,7 +521,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   @Override
   public ListenableFuture<Void> finalizeLogSegment(
       final long startTxId, final long endTxId) {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
         throwIfOutOfSync();
@@ -510,7 +534,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   
   @Override
   public ListenableFuture<Void> purgeLogsOlderThan(final long minTxIdToKeep) {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws Exception {
         getProxy().purgeLogsOlderThan(createReqInfo(), minTxIdToKeep);
@@ -522,7 +546,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   @Override
   public ListenableFuture<RemoteEditLogManifest> getEditLogManifest(
       final long fromTxnId, final boolean inProgressOk) {
-    return executor.submit(new Callable<RemoteEditLogManifest>() {
+    return parallelExecutor.submit(new Callable<RemoteEditLogManifest>() {
       @Override
       public RemoteEditLogManifest call() throws IOException {
         GetEditLogManifestResponseProto ret = getProxy().getEditLogManifest(
@@ -538,7 +562,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   @Override
   public ListenableFuture<PrepareRecoveryResponseProto> prepareRecovery(
       final long segmentTxId) {
-    return executor.submit(new Callable<PrepareRecoveryResponseProto>() {
+    return singleThreadExecutor.submit(new Callable<PrepareRecoveryResponseProto>() {
       @Override
       public PrepareRecoveryResponseProto call() throws IOException {
         if (!hasHttpServerEndPoint()) {
@@ -556,7 +580,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   @Override
   public ListenableFuture<Void> acceptRecovery(
       final SegmentStateProto log, final URL url) {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
         getProxy().acceptRecovery(createReqInfo(), log, url);
@@ -567,7 +591,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   
   @Override
   public ListenableFuture<Void> doPreUpgrade() {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
         getProxy().doPreUpgrade(journalId);
@@ -578,7 +602,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   
   @Override
   public ListenableFuture<Void> doUpgrade(final StorageInfo sInfo) {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
         getProxy().doUpgrade(journalId, sInfo);
@@ -589,7 +613,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   
   @Override
   public ListenableFuture<Void> doFinalize() {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
         getProxy().doFinalize(journalId);
@@ -601,7 +625,7 @@ public class IPCLoggerChannel implements AsyncLogger {
   @Override
   public ListenableFuture<Boolean> canRollBack(final StorageInfo storage,
       final StorageInfo prevStorage, final int targetLayoutVersion) {
-    return executor.submit(new Callable<Boolean>() {
+    return singleThreadExecutor.submit(new Callable<Boolean>() {
       @Override
       public Boolean call() throws IOException {
         return getProxy().canRollBack(journalId, storage, prevStorage,
@@ -612,7 +636,7 @@ public class IPCLoggerChannel implements AsyncLogger {
 
   @Override
   public ListenableFuture<Void> doRollback() {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
         getProxy().doRollback(journalId);
@@ -623,7 +647,7 @@ public class IPCLoggerChannel implements AsyncLogger {
 
   @Override
   public ListenableFuture<Void> discardSegments(final long startTxId) {
-    return executor.submit(new Callable<Void>() {
+    return singleThreadExecutor.submit(new Callable<Void>() {
       @Override
       public Void call() throws IOException {
         getProxy().discardSegments(journalId, startTxId);
@@ -634,7 +658,7 @@ public class IPCLoggerChannel implements AsyncLogger {
 
   @Override
   public ListenableFuture<Long> getJournalCTime() {
-    return executor.submit(new Callable<Long>() {
+    return singleThreadExecutor.submit(new Callable<Long>() {
       @Override
       public Long call() throws IOException {
         return getProxy().getJournalCTime(journalId);
